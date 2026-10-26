@@ -5,6 +5,8 @@ import SoundBrowser from './SoundBrowser';
 import StudioTimeline from './StudioTimeline';
 import FxPanel from './FxPanel';
 import PatternEditor from './PatternEditor';
+import ClipEditor from './ClipEditor';
+import { useMusicalTyping } from './useMusicalTyping';
 import StudioExport from './StudioExport';
 import { useEngineSync } from './useEngineSync';
 
@@ -15,7 +17,9 @@ import { useEngineSync } from './useEngineSync';
 export default function StudioApp() {
   useEngineSync();
   useStudioShortcuts();
+  useMusicalTyping();
   const editorClipId = useStudio((s) => (s.editorClipId && s.session.clips.some((c) => c.id === s.editorClipId) ? s.editorClipId : null));
+  const clipEditorId = useStudio((s) => (s.clipEditorId && s.session.clips.some((c) => c.id === s.clipEditorId) ? s.clipEditorId : null));
   const fxTarget = useStudio((s) => (s.fxPanelTrackId === 'master' || (s.fxPanelTrackId && s.session.tracks.some((t) => t.id === s.fxPanelTrackId)) ? s.fxPanelTrackId : null));
   const [exportOpen, setExportOpen] = useState(false);
   const [bottomH, setBottomH] = useState(380);
@@ -28,7 +32,7 @@ export default function StudioApp() {
     window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
   };
 
-  const bottom = editorClipId ? <PatternEditor clipId={editorClipId} /> : fxTarget ? <FxPanel target={fxTarget} /> : null;
+  const bottom = editorClipId ? <PatternEditor clipId={editorClipId} /> : clipEditorId ? <ClipEditor clipId={clipEditorId} /> : fxTarget ? <FxPanel target={fxTarget} /> : null;
 
   return (
     <div className="studio-app">

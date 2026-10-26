@@ -38,7 +38,7 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       // Forward startup flags / a double-clicked .mvproj path to the preload script.
-      additionalArguments: process.argv.filter((a) => a.startsWith('--open=') || a.startsWith('--seek=') || a.startsWith('--export=') || a.startsWith('--select=') || a === '--studio' || a.startsWith('--workspace=') || a.startsWith('--export-audio=') || a.startsWith('--studio-fx=') || a.startsWith('--studio-editor=') || a.startsWith('--studio-play=') || /\.mvproj$/i.test(a)),
+      additionalArguments: process.argv.filter((a) => a.startsWith('--open=') || a.startsWith('--seek=') || a.startsWith('--export=') || a.startsWith('--select=') || a === '--studio' || a.startsWith('--workspace=') || a.startsWith('--export-audio=') || a.startsWith('--studio-fx=') || a.startsWith('--studio-editor=') || a.startsWith('--studio-clip=') || a.startsWith('--studio-play=') || /\.mvproj$/i.test(a)),
       contextIsolation: true,
       nodeIntegration: false,
       // Allow <video>/<img> to load local files via file:// (local-only app).
@@ -95,7 +95,7 @@ function createWindow() {
           // capturePage can fail when the GPU/viz process is flaky; fall back to the main canvas pixels
           console.error('[screenshot] capturePage failed, saving canvas instead:', String(err));
           const dataUrl: string = await win!.webContents.executeJavaScript(
-            `(document.querySelector('.studio canvas') || document.querySelector('.preview canvas')).toDataURL('image/png')`,
+            `(document.querySelector('.ce-spec') || document.querySelector('.eq-canvas') || document.querySelector('.studio canvas') || document.querySelector('.preview canvas')).toDataURL('image/png')`,
           );
           fs.writeFileSync(out, Buffer.from(dataUrl.replace(/^data:image\/png;base64,/, ''), 'base64'));
         }
@@ -107,6 +107,11 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Local app: allow microphone access for Audio Studio recording without prompting.
+  const { session } = require('electron') as typeof import('electron');
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
+    callback(permission === 'media' || permission === 'audioCapture' as string);
+  });
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -305,6 +310,7 @@ ipcMain.handle('fs:writeBinary', async (_e, filePath: string, data: ArrayBuffer)
 });
 
 ipcMain.handle('app:tempPath', async (_e, name: string) => path.join(TEMP_DIR, name));
+ipcMain.handle('fs:ensureDir', async (_e, dir: string) => { await fs.promises.mkdir(dir, { recursive: true }); });
 
 ipcMain.handle('audio:encode', async (_e, wavPath: string, outPath: string, format: string, bitrate = '320k') => {
   const args = ['-y', '-v', 'error', '-i', wavPath];
@@ -316,6 +322,24 @@ ipcMain.handle('audio:encode', async (_e, wavPath: string, outPath: string, form
   args.push(outPath);
   const { code, stderr } = await run(FFMPEG, args);
   return code === 0 ? { ok: true } : { ok: false, error: stderr.trim().split('\n').slice(-3).join('\n') };
+});
+
+/**
+ * Offline audio processing with FFmpeg (used by the clip editor's render-in-place tools):
+ * pitch shift / time stretch via rubberband, denoise via afftdn, loudness normalisation.
+ */
+ipcMain.handle('audio:process', async (_e, inPath: string, op: { type: 'pitch'; semitones: number } | { type: 'tempo'; factor: number } | { type: 'denoise'; strength: number } | { type: 'loudnorm' } | { type: 'filter'; graph: string }) => {
+  const out = path.join(TEMP_DIR, `proc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.wav`);
+  let af: string;
+  switch (op.type) {
+    case 'pitch': af = `rubberband=pitch=${Math.pow(2, op.semitones / 12).toFixed(6)}:tempo=1:pitchq=quality:transients=crisp`; break;
+    case 'tempo': af = `rubberband=tempo=${Math.max(0.1, op.factor).toFixed(6)}:pitch=1:pitchq=quality`; break;
+    case 'denoise': af = `afftdn=nr=${Math.min(97, Math.max(0.01, op.strength)).toFixed(2)}:nf=-30:tn=1`; break;
+    case 'loudnorm': af = 'loudnorm=I=-16:TP=-1.5:LRA=11'; break;
+    case 'filter': af = op.graph; break;
+  }
+  const { code, stderr } = await run(FFMPEG, ['-y', '-v', 'error', '-i', inPath, '-af', af, '-ar', '48000', '-c:a', 'pcm_f32le', out]);
+  return code === 0 && fs.existsSync(out) ? { ok: true, path: out } : { ok: false, error: stderr.trim().split('\n').slice(-3).join('\n') };
 });
 
 ipcMain.handle('dialog:exportAudio', async (_e, defaultName: string, format: string) => {

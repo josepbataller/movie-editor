@@ -86,6 +86,7 @@ export default function App() {
         if (window.api.startupWorkspace === 'audio') useProject.getState().setWorkspace('audio');
         if (window.api.startupStudioFx) useStudio.getState().openFx(window.api.startupStudioFx);
         if (window.api.startupStudioEditor) useStudio.getState().openEditor(window.api.startupStudioEditor);
+        if (window.api.startupStudioClip) useStudio.getState().openClipEditor(window.api.startupStudioClip);
         if (window.api.startupStudioPlay) {
           setTimeout(() => useStudio.getState().setPlaying(true), 800);
           setTimeout(() => { const s = useStudio.getState(); const eng = getEngine(); console.warn(`[studio-play] position ${s.currentTime.toFixed(2)}s playing=${s.playing} engine=${eng.playing} ctx=${eng.ctx.state} ctxTime=${eng.ctx.currentTime.toFixed(2)} enginePos=${eng.position().toFixed(2)}`); s.setPlaying(false); window.api.closeNow(); }, 800 + window.api.startupStudioPlay * 1000);

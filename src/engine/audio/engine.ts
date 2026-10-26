@@ -3,7 +3,8 @@ import {
 } from '@/shared/audioTypes';
 import type { MediaAsset } from '@/shared/types';
 import { buildEffect, FxNode } from './effects';
-import { playSynth, playDrum, Voice } from './instruments';
+import { playSynth, playDrum, playSampler, Voice } from './instruments';
+import { Recorder } from './recorder';
 
 // Audio Studio engine: Web Audio graph (tracks -> effects -> gain/pan -> master -> fx -> out),
 // sample playback with fades, note scheduling for instrument tracks, metronome, loop,
@@ -22,7 +23,7 @@ interface TrackChain {
   track: StudioTrack;
 }
 
-interface ScheduledSample { source: AudioBufferSourceNode; gain: GainNode; clipId: string }
+interface ScheduledSample { source: AudioBufferSourceNode; gain: GainNode; clipId: string; fx: FxNode[] }
 
 export class StudioEngine {
   readonly ctx: AudioContext;
@@ -61,7 +62,10 @@ export class StudioEngine {
     this.masterAnalyser.fftSize = 2048;
     this.masterAnalyser.smoothingTimeConstant = 0.8;
     this.masterIn.connect(this.masterGain);
-    this.masterGain.connect(this.masterAnalyser);
+    // transparent safety limiter so stacked instruments don't clip the output
+    const limiter = makeLimiter(this.ctx);
+    this.masterGain.connect(limiter);
+    limiter.connect(this.masterAnalyser);
     this.masterAnalyser.connect(this.ctx.destination);
   }
 
@@ -133,6 +137,7 @@ export class StudioEngine {
 
   async preload(session: AudioSession, assets: MediaAsset[]) {
     const ids = new Set(session.clips.filter((c): c is SampleClip => c.type === 'sample').map((c) => c.assetId));
+    for (const t of session.tracks) if (t.instrument?.kind === 'sampler') ids.add(t.instrument.assetId);
     await Promise.all([...ids].map((id) => { const a = assets.find((x) => x.id === id); return a ? this.loadAsset(a) : null; }));
   }
 
@@ -166,6 +171,11 @@ export class StudioEngine {
       const audible = !track.muted && (!anySolo || track.solo);
       ch.gain.gain.setTargetAtTime(audible ? track.gain : 0, ctx.currentTime, 0.01);
       ch.pan.pan.setTargetAtTime(track.pan, ctx.currentTime, 0.01);
+    }
+    // clip-level effects of clips currently playing: update parameters in place
+    for (const smp of this.samples) {
+      const clip = session.clips.find((c) => c.id === smp.clipId);
+      if (clip?.type === 'sample' && (clip.effects ?? []).length === smp.fx.length) (clip.effects ?? []).forEach((e, i) => smp.fx[i].update(e, session.bpm));
     }
     // master
     const mIds = session.masterEffects.map((e) => `${e.id}:${e.type}:${e.enabled}`);
@@ -252,6 +262,9 @@ export class StudioEngine {
     const now = this.ctx.currentTime;
     for (const s of this.samples) {
       try { s.gain.gain.cancelScheduledValues(now); s.gain.gain.setTargetAtTime(0, now, 0.005); s.source.stop(now + 0.03); } catch { /* */ }
+      // sources that never started (scheduled in the future) don't fire onended: dispose here too
+      const fx = s.fx; const gain = s.gain; const source = s.source;
+      setTimeout(() => { fx.forEach((f) => f.dispose()); gain.disconnect(); source.disconnect(); }, 100);
     }
     this.samples = [];
     for (const v of this.voices) v.kill();
@@ -304,6 +317,25 @@ export class StudioEngine {
   }
 
   private metroOut: GainNode | null = null;
+
+  /** Play `bars` bars of metronome clicks right now without moving the transport (recording count-in). */
+  async countIn(bars = 1): Promise<void> {
+    if (!this.session) return;
+    if (this.ctx.state === 'suspended') await this.ctx.resume();
+    const s = this.session;
+    const beat = 60 / s.bpm;
+    const total = bars * s.beatsPerBar;
+    if (!this.metroOut) { this.metroOut = this.ctx.createGain(); this.metroOut.gain.value = 0.5; this.metroOut.connect(this.masterGain); }
+    const t0 = this.ctx.currentTime + 0.05;
+    for (let b = 0; b < total; b++) {
+      const t = t0 + b * beat;
+      const o = this.ctx.createOscillator(); const g = this.ctx.createGain();
+      o.frequency.value = b % s.beatsPerBar === 0 ? 1600 : 1000;
+      g.gain.setValueAtTime(0.6, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+      o.connect(g); g.connect(this.metroOut); o.start(t); o.stop(t + 0.06);
+    }
+    await new Promise((r) => setTimeout(r, (total * beat + 0.05) * 1000));
+  }
   private scheduleMetronome(fromT: number, toT: number, toCtx?: (t: number) => number) {
     const s = this.session!;
     const beat = 60 / s.bpm;
@@ -340,7 +372,12 @@ export class StudioEngine {
       source.buffer = buffer;
       source.playbackRate.value = clip.rate;
       const gain = ctx.createGain();
-      source.connect(gain); gain.connect(chain.input);
+      // clip-level effects sit between the clip gain and the track chain
+      const fx = (clip.effects ?? []).map((e) => buildEffect(ctx, e, s.bpm));
+      source.connect(gain);
+      let prev: AudioNode = gain;
+      for (const f of fx) { prev.connect(f.input); prev = f.output; }
+      prev.connect(chain.input);
 
       const startT = Math.max(from, clip.start);        // timeline time where playback begins
       const local = startT - clip.start;                // seconds into the clip
@@ -354,7 +391,11 @@ export class StudioEngine {
         source.start(when, Math.max(0, Math.min(offset, buffer.duration - 0.001)));
         source.stop(when + playDur + 0.002);
       } catch { continue; }
-      if (ctx === this.ctx) this.samples.push({ source, gain, clipId: clip.id });
+      if (ctx === this.ctx) {
+        const entry: ScheduledSample = { source, gain, clipId: clip.id, fx };
+        source.onended = () => { fx.forEach((f) => f.dispose()); gain.disconnect(); source.disconnect(); };
+        this.samples.push(entry);
+      }
     }
   }
 
@@ -400,6 +441,11 @@ export class StudioEngine {
 
   private trigger(ctx: BaseAudioContext, dest: AudioNode, inst: InstrumentSettings, pitch: number, velocity: number, when: number, duration: number | null, trackId: string): Voice | null {
     if (inst.kind === 'drums') return playDrum(ctx, dest, inst, pitch, velocity, when);
+    if (inst.kind === 'sampler') {
+      const buf = this.buffers.get(inst.assetId);
+      if (!buf) { const a = this.assets.find((x) => x.id === inst.assetId); if (a) void this.loadAsset(a); return null; }
+      return playSampler(ctx, dest, inst, buf, pitch, velocity, when, duration);
+    }
     const prev = this.lastFreq.get(trackId) ?? null;
     this.lastFreq.set(trackId, midiToFreq(pitch));
     return playSynth(ctx, dest, inst, pitch, velocity, when, duration, inst.glide > 0 ? prev : null);
@@ -429,15 +475,35 @@ export class StudioEngine {
   /** Audition an instrument without touching the session: plays straight into the master bus. */
   async previewInstrument(inst: InstrumentSettings, pitches: number[], gapMs = 160) {
     if (this.ctx.state === 'suspended') await this.ctx.resume();
+    if (inst.kind === 'sampler') { const a = this.assets.find((x) => x.id === inst.assetId); if (a) await this.loadAsset(a); }
     const out = this.ctx.createGain(); out.gain.value = 0.8; out.connect(this.masterIn);
     const t0 = this.ctx.currentTime + 0.02;
     const voices: Voice[] = [];
     pitches.forEach((p, i) => {
       const when = t0 + (i * gapMs) / 1000;
-      const v = inst.kind === 'drums' ? playDrum(this.ctx, out, inst, p, 0.9, when) : playSynth(this.ctx, out, inst, p, 0.9, when, 0.45, null);
+      const v = this.trigger(this.ctx, out, inst, p, 0.9, when, inst.kind === 'drums' ? null : 0.45, '__preview');
       if (v) voices.push(v);
     });
     setTimeout(() => { voices.forEach((v) => v.kill()); out.disconnect(); }, pitches.length * gapMs + 3000);
+  }
+
+  /** Factory for new AudioBuffers (used by the clip editor's processing tools). */
+  createBuffer = (channels: number, length: number, sampleRate: number) => this.ctx.createBuffer(channels, length, sampleRate);
+
+  /** Register a freshly made buffer (recording / render-in-place) under an asset id so clips can use it at once. */
+  registerBuffer(assetId: string, buffer: AudioBuffer) { this.buffers.set(assetId, buffer); this.reversed.delete(assetId); this.failed.delete(assetId); }
+
+  // ---------------------------------------------------------------------------
+  // Recording
+  // ---------------------------------------------------------------------------
+
+  private _recorder: Recorder | null = null;
+  get recorder(): Recorder { if (!this._recorder) this._recorder = new Recorder(this.ctx); return this._recorder; }
+
+  /** Timeline position that corresponds to a context time (while playing). */
+  timelineAt(ctxTime: number): number {
+    if (!this._playing) return this.startPos;
+    return this.startPos + (ctxTime - this.startCtxTime);
   }
 
   /** Audition a sample clip region (e.g. after trimming). */
@@ -483,7 +549,9 @@ export class StudioEngine {
     const mfx = session.masterEffects.map((e) => buildEffect(octx, e, session.bpm));
     let prev: AudioNode = masterIn;
     for (const f of mfx) { prev.connect(f.input); prev = f.output; }
-    prev.connect(masterGain); masterGain.connect(octx.destination);
+    prev.connect(masterGain);
+    const limiter = makeLimiter(octx);
+    masterGain.connect(limiter); limiter.connect(octx.destination);
 
     const anySolo = session.tracks.some((t) => t.solo);
     const chains = new Map<string, TrackChain>();
@@ -515,6 +583,13 @@ export class StudioEngine {
     this.chains.clear();
     void this.ctx.close();
   }
+}
+
+/** Brick-wall-ish limiter: fast compressor with a high ratio just below full scale. */
+function makeLimiter(ctx: BaseAudioContext): DynamicsCompressorNode {
+  const l = ctx.createDynamicsCompressor();
+  l.threshold.value = -3; l.knee.value = 0; l.ratio.value = 20; l.attack.value = 0.002; l.release.value = 0.12;
+  return l;
 }
 
 function shape(p: number, curve: StudioClip['fadeCurve']): number {

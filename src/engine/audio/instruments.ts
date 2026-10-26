@@ -1,8 +1,11 @@
-import { SynthPatch, DrumKitPatch, midiToFreq } from '@/shared/audioTypes';
+import { SynthPatch, DrumKitPatch, SamplerPatch, OscWave, midiToFreq } from '@/shared/audioTypes';
 
-// Procedural instruments for the Audio Studio: a subtractive/FM synth and a
-// synthesized drum kit. Everything is built from oscillators, noise and
-// envelopes, so the same code runs in real time and in offline rendering.
+// Procedural instruments for the Audio Studio:
+//  - a subtractive / FM / additive synth (custom waveforms from harmonic series),
+//    with delayed vibrato, breath noise and stereo detune for acoustic-style sounds
+//  - Karplus-Strong plucked strings (guitars, harp, piano-like tones)
+//  - a synthesized drum kit, and a sampler that re-pitches a recorded sound.
+// Everything is plain Web Audio nodes, so the same code runs live and offline.
 
 export interface Voice {
   /** Start the release stage at `when` (ctx time). Nodes free themselves afterwards. */
@@ -31,7 +34,6 @@ function noiseBuffer(ctx: BaseAudioContext): AudioBuffer {
   }
   return b;
 }
-
 function noiseSource(ctx: BaseAudioContext): AudioBufferSourceNode {
   const s = ctx.createBufferSource();
   s.buffer = noiseBuffer(ctx);
@@ -39,16 +41,32 @@ function noiseSource(ctx: BaseAudioContext): AudioBufferSourceNode {
   return s;
 }
 
+// Custom waveforms (additive synthesis) are cached per context + harmonic recipe.
+const waveCache = new WeakMap<BaseAudioContext, Map<string, PeriodicWave>>();
+function periodicWave(ctx: BaseAudioContext, harmonics: number[]): PeriodicWave {
+  let m = waveCache.get(ctx);
+  if (!m) { m = new Map(); waveCache.set(ctx, m); }
+  const key = harmonics.map((h) => h.toFixed(3)).join(',');
+  let w = m.get(key);
+  if (!w) {
+    const n = harmonics.length + 1;
+    const real = new Float32Array(n), imag = new Float32Array(n);
+    harmonics.forEach((a, i) => { imag[i + 1] = a; });
+    w = ctx.createPeriodicWave(real, imag, { disableNormalization: false });
+    m.set(key, w);
+  }
+  return w;
+}
+
 /** ADSR on an AudioParam. Returns a function that schedules the release and returns its end time. */
 function adsr(param: AudioParam, when: number, peak: number, a: number, d: number, s: number, r: number, floor = 0.0001) {
   const A = Math.max(0.001, a), D = Math.max(0.001, d), R = Math.max(0.005, r);
   param.cancelScheduledValues(when);
-  param.setValueAtTime(Math.max(floor, param.value * 0 + floor), when);
+  param.setValueAtTime(floor, when);
   param.linearRampToValueAtTime(Math.max(floor, peak), when + A);
   param.setTargetAtTime(Math.max(floor, peak * s), when + A, D / 3);
   return (relWhen: number) => {
     const t = Math.max(relWhen, when + 0.002);
-    // freeze the envelope where it is (even mid-attack), then decay to silence
     holdAt(param, t);
     param.setTargetAtTime(floor, t, R / 3);
     return t + R * 1.5;
@@ -63,6 +81,8 @@ export function playSynth(
   ctx: BaseAudioContext, dest: AudioNode, patch: SynthPatch, pitch: number, velocity: number, when: number,
   duration: number | null, glideFromFreq: number | null,
 ): Voice {
+  if (patch.mode === 'pluck') return playPluck(ctx, dest, patch, pitch, velocity, when, duration);
+
   const freq = midiToFreq(pitch);
   const vel = 0.3 + 0.7 * Math.min(1, Math.max(0, velocity));
   const nodes: AudioNode[] = [];
@@ -76,45 +96,78 @@ export function playSynth(
   amp.gain.value = 0.0001;
   mixer.connect(filter); filter.connect(amp); amp.connect(dest);
 
-  // LFO
+  // LFO (cutoff / amp / pitch) and delayed vibrato (pitch)
   let lfoPitch: GainNode | null = null;
-  let lfo: OscillatorNode | null = null;
   if (patch.lfo.target !== 'none' && patch.lfo.depth > 0) {
-    lfo = ctx.createOscillator(); lfo.frequency.value = patch.lfo.rate; sources.push(lfo);
+    const lfo = ctx.createOscillator(); lfo.frequency.value = patch.lfo.rate; sources.push(lfo);
     const lg = ctx.createGain(); nodes.push(lg); lfo.connect(lg);
     if (patch.lfo.target === 'pitch') { lg.gain.value = patch.lfo.depth; lfoPitch = lg; }
     else if (patch.lfo.target === 'cutoff') { lg.gain.value = patch.lfo.depth; lg.connect(filter.frequency); }
     else if (patch.lfo.target === 'amp') { lg.gain.value = patch.lfo.depth * 0.5; lg.connect(mixer.gain); }
   }
+  const pitchMods: GainNode[] = [];
+  if (lfoPitch) pitchMods.push(lfoPitch);
+  if (patch.vibrato && patch.vibrato.depth > 0) {
+    const vib = ctx.createOscillator(); vib.frequency.value = patch.vibrato.rate; sources.push(vib);
+    const vg = ctx.createGain(); nodes.push(vg);
+    vg.gain.setValueAtTime(0, when);
+    vg.gain.linearRampToValueAtTime(patch.vibrato.depth, when + Math.max(0.05, patch.vibrato.delay) + 0.3);
+    vib.connect(vg);
+    pitchMods.push(vg);
+  }
+
+  const addOsc = (wave: OscWave, harmonics: number[] | undefined, f: number, detune: number, level: number, glide: boolean) => {
+    if (level <= 0) return undefined;
+    const g = ctx.createGain(); g.gain.value = level; nodes.push(g); g.connect(mixer);
+    if (wave === 'noise') { const n = noiseSource(ctx); n.connect(g); sources.push(n); return undefined; }
+    const o = ctx.createOscillator();
+    if (wave === 'custom' && harmonics?.length) o.setPeriodicWave(periodicWave(ctx, harmonics)); else o.type = wave === 'custom' ? 'sawtooth' : wave;
+    if (glide && glideFromFreq && patch.glide > 0) {
+      o.frequency.setValueAtTime(Math.max(1, glideFromFreq * (f / freq)), when);
+      o.frequency.exponentialRampToValueAtTime(f, when + patch.glide);
+    } else {
+      o.frequency.value = f;
+    }
+    o.detune.value = detune;
+    for (const m of pitchMods) m.connect(o.detune);
+    o.connect(g); sources.push(o);
+    return o;
+  };
 
   const f1 = freq * Math.pow(2, patch.osc1.octave);
   const f2 = freq * Math.pow(2, patch.osc2.octave);
-  const osc1Gain = ctx.createGain(); osc1Gain.gain.value = patch.osc1.level; nodes.push(osc1Gain); osc1Gain.connect(mixer);
-  const osc1 = makeOscInto(ctx, patch.osc1.wave, f1, patch.osc1.detune, osc1Gain, sources, nodes, glideFromFreq, patch.glide, freq, when, lfoPitch);
-  // unison voices for osc1
+  const osc1 = addOsc(patch.osc1.wave, patch.osc1.harmonics, f1, patch.osc1.detune, patch.osc1.level, true);
   for (let u = 1; u <= patch.unison; u++) {
     const spread = patch.unisonSpread * u * (u % 2 ? 1 : -1);
-    const g = ctx.createGain(); g.gain.value = patch.osc1.level * 0.6 / patch.unison; nodes.push(g); g.connect(mixer);
-    makeOscInto(ctx, patch.osc1.wave, f1, patch.osc1.detune + spread, g, sources, nodes, null, 0, freq, when, lfoPitch);
+    addOsc(patch.osc1.wave, patch.osc1.harmonics, f1, patch.osc1.detune + spread, (patch.osc1.level * 0.6) / patch.unison, false);
   }
-  if (patch.osc2.level > 0) {
-    const g = ctx.createGain(); g.gain.value = patch.osc2.level; nodes.push(g); g.connect(mixer);
-    makeOscInto(ctx, patch.osc2.wave, f2, patch.osc2.detune, g, sources, nodes, glideFromFreq, patch.glide, freq, when, lfoPitch);
+  // stereo width: a slightly detuned copy panned to each side
+  if (patch.stereo && patch.stereo > 0) {
+    const pL = ctx.createStereoPanner(), pR = ctx.createStereoPanner(); pL.pan.value = -0.7; pR.pan.value = 0.7; nodes.push(pL, pR);
+    for (const [pan, sign] of [[pL, -1], [pR, 1]] as const) {
+      const g = ctx.createGain(); g.gain.value = patch.osc1.level * 0.45; nodes.push(g); g.connect(pan); pan.connect(mixer);
+      const o = ctx.createOscillator();
+      if (patch.osc1.wave === 'custom' && patch.osc1.harmonics?.length) o.setPeriodicWave(periodicWave(ctx, patch.osc1.harmonics)); else o.type = patch.osc1.wave === 'noise' || patch.osc1.wave === 'custom' ? 'sawtooth' : patch.osc1.wave;
+      o.frequency.value = f1; o.detune.value = patch.osc1.detune + sign * patch.stereo;
+      for (const m of pitchMods) m.connect(o.detune);
+      o.connect(g); sources.push(o);
+    }
   }
-  if (patch.sub > 0) {
-    const g = ctx.createGain(); g.gain.value = patch.sub; nodes.push(g); g.connect(mixer);
-    makeOscInto(ctx, 'sine', freq / 2, 0, g, sources, nodes, null, 0, freq, when, null);
-  }
-  if (patch.noise > 0) {
-    const g = ctx.createGain(); g.gain.value = patch.noise * 0.5; nodes.push(g); g.connect(mixer);
-    const n = noiseSource(ctx); n.connect(g); sources.push(n);
+  addOsc(patch.osc2.wave, patch.osc2.harmonics, f2, patch.osc2.detune, patch.osc2.level, true);
+  if (patch.sub > 0) addOsc('sine', undefined, freq / 2, 0, patch.sub, false);
+  if (patch.noise > 0) addOsc('noise', undefined, 0, 0, patch.noise * 0.5, false);
+  if (patch.breath && patch.breath > 0) {
+    // breath / bow noise: band-passed noise following the note, fading in with the attack
+    const n = noiseSource(ctx); sources.push(n);
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = Math.min(12000, freq * 4); bp.Q.value = 0.8; nodes.push(bp);
+    const g = ctx.createGain(); g.gain.value = patch.breath * 0.6; nodes.push(g);
+    n.connect(bp); bp.connect(g); g.connect(mixer);
   }
   // FM on osc1
   if (osc1 && patch.fm.amount > 0) {
     const mod = ctx.createOscillator(); mod.frequency.value = f1 * patch.fm.ratio; sources.push(mod);
-    const mg = ctx.createGain(); mg.gain.value = patch.fm.amount; nodes.push(mg);
+    const mg = ctx.createGain(); nodes.push(mg);
     mod.connect(mg); mg.connect(osc1.frequency);
-    // FM index decays with the amp envelope for a natural attack
     mg.gain.setValueAtTime(patch.fm.amount * 1.5, when);
     mg.gain.setTargetAtTime(patch.fm.amount * 0.6, when, Math.max(0.05, patch.ampEnv.decay));
   }
@@ -152,25 +205,108 @@ export function playSynth(
   return voice;
 }
 
-function makeOscInto(
-  ctx: BaseAudioContext, wave: SynthPatch['osc1']['wave'], f: number, detune: number, into: GainNode,
-  sources: (OscillatorNode | AudioBufferSourceNode)[], _nodes: AudioNode[], glideFrom: number | null, glide: number,
-  noteFreq: number, when: number, lfoPitch: GainNode | null,
-): OscillatorNode | undefined {
-  if (wave === 'noise') { const n = noiseSource(ctx); n.connect(into); sources.push(n); return undefined; }
-  const o = ctx.createOscillator();
-  o.type = wave;
-  if (glideFrom && glide > 0) {
-    o.frequency.setValueAtTime(Math.max(1, glideFrom * (f / noteFreq)), when);
-    o.frequency.exponentialRampToValueAtTime(f, when + glide);
-  } else {
-    o.frequency.value = f;
+// ---------------------------------------------------------------------------
+// Karplus-Strong plucked string: a short excitation burst feeds a tuned delay
+// loop with lowpass damping; the filter/envelope of the patch shape the result.
+// ---------------------------------------------------------------------------
+
+// A DelayNode inside a feedback cycle cannot be shorter than one render quantum (128 samples,
+// ≈375 Hz), so the string is synthesised sample by sample in JS into a buffer, which is then
+// played and shaped by the patch filter/envelope like any other voice. Buffers are cached per
+// (context, pitch, damping, waveform).
+const pluckCache = new WeakMap<BaseAudioContext, Map<string, AudioBuffer>>();
+function pluckBuffer(ctx: BaseAudioContext, freq: number, damping: number, harmonics: number[] | undefined, seconds: number): AudioBuffer {
+  let m = pluckCache.get(ctx);
+  if (!m) { m = new Map(); pluckCache.set(ctx, m); }
+  const key = `${freq.toFixed(2)}|${damping.toFixed(2)}|${(harmonics ?? []).map((h) => h.toFixed(2)).join(',')}|${seconds}`;
+  const hit = m.get(key);
+  if (hit) return hit;
+  const sr = ctx.sampleRate;
+  const len = Math.floor(sr * seconds);
+  const out = ctx.createBuffer(1, len, sr);
+  const data = out.getChannelData(0);
+  const L = Math.max(2, Math.round(sr / freq));
+  // excitation: noise mixed with one period of the harmonic recipe (brighter/darker attack)
+  const line = new Float32Array(L);
+  for (let i = 0; i < L; i++) {
+    let h = 0;
+    if (harmonics?.length) { for (let k = 0; k < harmonics.length; k++) h += harmonics[k] * Math.sin((2 * Math.PI * (k + 1) * i) / L); h *= 0.6; }
+    line[i] = (Math.random() * 2 - 1) * 0.7 + h;
   }
-  o.detune.value = detune;
-  if (lfoPitch) lfoPitch.connect(o.detune);
-  o.connect(into);
-  sources.push(o);
-  return o;
+  // loop: two-point average lowpass (damping blends between averaged and raw) with slight loss
+  const d = Math.min(1, Math.max(0, damping));
+  const blend = 0.25 + 0.7 * d;         // 1 = bright (no averaging), low = dark
+  const loss = 0.996 + 0.0035 * d - Math.min(0.01, freq / 60000);
+  let pos = 0;
+  for (let i = 0; i < len; i++) {
+    const cur = line[pos];
+    const next = line[(pos + 1) % L];
+    data[i] = cur;
+    line[pos] = (cur * blend + ((cur + next) * 0.5) * (1 - blend)) * loss;
+    pos = (pos + 1) % L;
+  }
+  if (m.size > 400) m.delete(m.keys().next().value!);
+  m.set(key, out);
+  return out;
+}
+
+function playPluck(ctx: BaseAudioContext, dest: AudioNode, patch: SynthPatch, pitch: number, velocity: number, when: number, duration: number | null): Voice {
+  const freq = Math.min(8000, Math.max(20, midiToFreq(pitch) * Math.pow(2, patch.osc1.octave)));
+  const vel = 0.3 + 0.7 * Math.min(1, Math.max(0, velocity));
+  const natural = patch.ampEnv.decay * 2.5 + patch.ampEnv.release;
+  const seconds = Math.min(8, Math.max(0.5, natural + 0.3));
+  const src = ctx.createBufferSource();
+  src.buffer = pluckBuffer(ctx, freq, patch.pluckDamping ?? 0.5, patch.osc1.harmonics, seconds);
+
+  const filter = ctx.createBiquadFilter();
+  filter.type = patch.filter.type; filter.Q.value = Math.min(30, Math.max(0.05, patch.filter.resonance));
+  const baseCut = Math.min(20000, Math.max(20, patch.filter.cutoff * Math.pow(freq / 261.6, patch.filter.keyTrack)));
+  filter.frequency.setValueAtTime(Math.min(20000, Math.max(20, baseCut + patch.filter.envAmount)), when);
+  filter.frequency.setTargetAtTime(baseCut, when, Math.max(0.01, patch.filterEnv.decay) / 3);
+  const amp = ctx.createGain();
+  amp.gain.value = 0.0001;
+  src.connect(filter); filter.connect(amp); amp.connect(dest);
+
+  const releaseAmp = adsr(amp.gain, when, patch.gain * vel, patch.ampEnv.attack, patch.ampEnv.decay, patch.ampEnv.sustain, patch.ampEnv.release);
+  src.start(when);
+  let ended = false;
+  const voice: Voice = { release: () => {}, kill: () => {} };
+  const stopAt = (t: number) => {
+    if (ended) return; ended = true;
+    try { src.stop(t); } catch { /* */ }
+    src.onended = () => { src.disconnect(); filter.disconnect(); amp.disconnect(); voice.ended = true; };
+  };
+  voice.release = (relWhen: number) => { const end = releaseAmp(relWhen); stopAt(end + 0.05); };
+  voice.kill = () => { holdAt(amp.gain, ctx.currentTime); amp.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.01); stopAt(ctx.currentTime + 0.08); };
+  // plucked notes ring for their natural decay even when held longer
+  if (duration != null) voice.release(when + Math.max(0.01, Math.min(duration, natural)));
+  else stopAt(when + seconds + 0.1);
+  return voice;
+}
+
+// ---------------------------------------------------------------------------
+// Sampler: plays a decoded buffer re-pitched relative to its root note
+// ---------------------------------------------------------------------------
+
+export function playSampler(ctx: BaseAudioContext, dest: AudioNode, patch: SamplerPatch, buffer: AudioBuffer, pitch: number, velocity: number, when: number, duration: number | null): Voice {
+  const vel = 0.3 + 0.7 * Math.min(1, Math.max(0, velocity));
+  const src = ctx.createBufferSource();
+  src.buffer = buffer;
+  src.playbackRate.value = Math.pow(2, (pitch - patch.rootNote) / 12);
+  src.loop = patch.loop;
+  const amp = ctx.createGain();
+  amp.gain.value = 0.0001;
+  src.connect(amp); amp.connect(dest);
+  const releaseAmp = adsr(amp.gain, when, patch.gain * vel, patch.attack, 0.01, 1, patch.release);
+  src.start(when);
+  let ended = false;
+  const voice: Voice = { release: () => {}, kill: () => {} };
+  const stopAt = (t: number) => { if (ended) return; ended = true; try { src.stop(t); } catch { /* */ } src.onended = () => { src.disconnect(); amp.disconnect(); voice.ended = true; }; };
+  voice.release = (relWhen: number) => { const end = releaseAmp(relWhen); stopAt(end + 0.05); };
+  voice.kill = () => { holdAt(amp.gain, ctx.currentTime); amp.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.01); stopAt(ctx.currentTime + 0.08); };
+  if (duration != null) voice.release(when + Math.max(0.01, duration));
+  else if (!patch.loop) stopAt(when + buffer.duration / src.playbackRate.value + patch.release + 0.1);
+  return voice;
 }
 
 // ---------------------------------------------------------------------------
@@ -250,12 +386,10 @@ export function playDrum(ctx: BaseAudioContext, dest: AudioNode, kit: DrumKitPat
     default: return null;
   }
   if (style === 'lofi') {
-    // darker, crunchier
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 4500;
     out.disconnect(); out.connect(lp); lp.connect(dest);
   }
   const voice: Voice = { release: () => {}, kill: () => { for (const s of stops) s(); out.disconnect(); voice.ended = true; } };
-  // free the output node once the hit has decayed (ctx.currentTime is 0-based for offline contexts too)
   setTimeout(() => { out.disconnect(); voice.ended = true; }, Math.max(0, (endTime - ctx.currentTime) * 1000 + 100));
   return voice;
 }

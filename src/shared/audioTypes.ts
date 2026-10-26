@@ -49,6 +49,12 @@ export interface SampleClip extends StudioClipBase {
   inPoint: number;     // source offset (s)
   rate: number;        // playback rate (pitch+speed), 1 = normal
   reverse: boolean;
+  /** Clip-level effects (before the track chain). */
+  effects?: AudioEffect[];
+  /** Asset this clip was rendered from (render-in-place keeps the original available). */
+  sourceAssetId?: string;
+  /** The clip's region before the first render-in-place, so "Revert to original" is exact. */
+  original?: { assetId: string; inPoint: number; rate: number; reverse: boolean; duration: number };
 }
 
 export interface NoteEvent {
@@ -97,13 +103,26 @@ export type AudioEffectType = AudioEffect['type'];
 // Instruments (all synthesized procedurally – no sample library needed)
 // ---------------------------------------------------------------------------
 
-export type OscWave = 'sine' | 'square' | 'sawtooth' | 'triangle' | 'noise';
+export type OscWave = 'sine' | 'square' | 'sawtooth' | 'triangle' | 'noise' | 'custom';
+
+export type InstrumentCategory = 'Keys' | 'Strings' | 'Woodwinds' | 'Brass' | 'Guitars & Bass' | 'Mallets & Percussion' | 'Voices' | 'Synth Bass' | 'Synth Lead' | 'Synth Pad' | 'Synth FX' | 'Drums' | 'Sampler';
 
 export interface SynthPatch {
   kind: 'synth';
   name: string;
-  osc1: { wave: OscWave; octave: number; detune: number; level: number };
-  osc2: { wave: OscWave; octave: number; detune: number; level: number };
+  category?: InstrumentCategory;
+  /** 'subtractive' = oscillators -> filter -> amp; 'pluck' = Karplus-Strong string (noise burst into a tuned feedback delay). */
+  mode?: 'subtractive' | 'pluck';
+  osc1: { wave: OscWave; octave: number; detune: number; level: number; harmonics?: number[] };
+  osc2: { wave: OscWave; octave: number; detune: number; level: number; harmonics?: number[] };
+  /** Delayed vibrato (pitch LFO that fades in), typical of bowed/blown instruments. */
+  vibrato?: { rate: number; depth: number; delay: number };
+  /** Breath / bow noise level mixed before the filter. */
+  breath?: number;
+  /** Stereo width: detunes a second voice panned to the other side (cents). */
+  stereo?: number;
+  /** Pluck mode: string damping 0..1 (higher = brighter/longer). */
+  pluckDamping?: number;
   sub: number;                 // sub-oscillator level (one octave down sine)
   noise: number;               // noise level
   unison: number;              // extra detuned voices per osc (0..4)
@@ -120,6 +139,7 @@ export interface SynthPatch {
 export interface DrumKitPatch {
   kind: 'drums';
   name: string;
+  category?: InstrumentCategory;
   style: '808' | 'electro' | 'acoustic' | 'lofi';
   tune: number;      // semitones
   decay: number;     // multiplier
@@ -127,7 +147,20 @@ export interface DrumKitPatch {
   gain: number;
 }
 
-export type InstrumentSettings = SynthPatch | DrumKitPatch;
+/** Plays a recorded/imported sound at different pitches (root note = original pitch). */
+export interface SamplerPatch {
+  kind: 'sampler';
+  name: string;
+  category?: InstrumentCategory;
+  assetId: string;
+  rootNote: number;
+  loop: boolean;
+  attack: number;
+  release: number;
+  gain: number;
+}
+
+export type InstrumentSettings = SynthPatch | DrumKitPatch | SamplerPatch;
 
 /** Drum pads mapped to MIDI notes (General MIDI style). */
 export const DRUM_NOTES: { note: number; name: string; short: string }[] = [

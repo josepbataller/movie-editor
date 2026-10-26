@@ -4,7 +4,9 @@ import { useProject } from '@/store/useProject';
 import { getEngine } from '@/engine/audio/engine';
 import { formatTime } from '@/engine/project/importMedia';
 import { sendMixToVideo } from '@/engine/audio/bridge';
-import { DRUM_KITS, SYNTH_PRESETS } from '@/engine/audio/presets';
+import { INSTRUMENT_CATEGORIES, instrumentsInCategory, categoryIcon } from '@/engine/audio/presets';
+import { toggleRecording } from '@/engine/audio/recording';
+import { Recorder } from '@/engine/audio/recorder';
 
 export default function StudioTopBar({ onExport }: { onExport: () => void }) {
   const st = useStudio.getState;
@@ -22,6 +24,18 @@ export default function StudioTopBar({ onExport }: { onExport: () => void }) {
   const duration = useStudio((s) => sessionDuration(s.session));
   const [sending, setSending] = useState(false);
   const [addMenu, setAddMenu] = useState(false);
+  const recording = useStudio((s) => s.recording);
+  const armed = useStudio((s) => s.armedTrackId);
+  const countIn = useStudio((s) => s.countIn);
+  const monitor = useStudio((s) => s.monitorInput);
+  const inputDeviceId = useStudio((s) => s.inputDeviceId);
+  const octave = useStudio((s) => s.keyboardOctave);
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [recMenu, setRecMenu] = useState(false);
+  useEffect(() => {
+    if (!recMenu) return;
+    Recorder.devices().then(setDevices).catch(() => setDevices([]));
+  }, [recMenu]);
 
   const beat = 60 / bpm;
   const bar = Math.floor(currentTime / (beat * beatsPerBar)) + 1;
@@ -40,6 +54,22 @@ export default function StudioTopBar({ onExport }: { onExport: () => void }) {
         <button onClick={() => { st().setPlaying(false); st().setCurrentTime(st().currentTime); }} title="Stop (Esc)">■</button>
         <button className={loop.enabled ? 'on' : ''} onClick={() => st().setLoop({ enabled: !loop.enabled })} title="Loop the selected region (L)">🔁</button>
         <button className={metronome ? 'on' : ''} onClick={() => st().toggleMetronome()} title="Metronome (K)">🎵</button>
+        <button className={`rec ${recording ? 'on' : ''}`} onClick={() => void toggleRecording()} title={armed ? 'Record on the armed track (R)' : 'Arm an audio track (● on its header) and record (R)'}>●</button>
+        <div className="add-track" onMouseLeave={() => setRecMenu(false)}>
+          <button className="small" onClick={() => setRecMenu(!recMenu)} title="Recording options">▾</button>
+          {recMenu && (
+            <div className="menu" style={{ minWidth: 300 }}>
+              <div className="menu-title">Input device</div>
+              <select value={inputDeviceId ?? ''} onChange={(e) => st().setInputDevice(e.target.value || null)}>
+                <option value="">Default microphone</option>
+                {devices.map((d) => <option key={d.deviceId} value={d.deviceId}>{d.label || d.deviceId.slice(0, 8)}</option>)}
+              </select>
+              <label className="check" style={{ padding: '6px 8px' }}><input type="checkbox" checked={countIn} onChange={(e) => st().setCountIn(e.target.checked)} /> One-bar count-in</label>
+              <label className="check" style={{ padding: '6px 8px' }}><input type="checkbox" checked={monitor} onChange={(e) => { st().setMonitorInput(e.target.checked); getEngine().recorder.setMonitor(e.target.checked); }} /> Monitor input (hear the mic)</label>
+              <div className="dim small" style={{ padding: '4px 8px' }}>Takes are saved as WAV next to the project (or in the temp folder until it is saved) and appear under <b>Audio files</b>.</div>
+            </div>
+          )}
+        </div>
       </div>
       <div className="lcd" title="Bar . beat · time">
         <span className="big">{bar}.{beatInBar}</span>
@@ -56,18 +86,23 @@ export default function StudioTopBar({ onExport }: { onExport: () => void }) {
         <option value={0.5}>1/8</option>
         <option value={0.25}>1/16</option>
         <option value={0.125}>1/32</option>
+        <option value={0.0625}>1/64</option>
         <option value={1 / 3}>1/8 triplet</option>
+        <option value={1 / 6}>1/16 triplet</option>
       </select>
+      <span className="dim small" title="Computer keyboard octave (Z / X to change). Keys A W S E D F T G Y H U J K play the selected instrument.">⌨ C{octave}</span>
       <span className="sep" />
       <div className="add-track" onMouseLeave={() => setAddMenu(false)}>
         <button className="primary" onClick={() => setAddMenu(!addMenu)}>+ Track ▾</button>
         {addMenu && (
           <div className="menu">
             <button onClick={() => { st().addTrack('audio'); setAddMenu(false); }}>🎚 Audio track (recordings, music files)</button>
-            <div className="menu-title">Drums</div>
-            {DRUM_KITS.map((k) => <button key={k.name} onClick={() => { st().addTrack('instrument', k); setAddMenu(false); }}>🥁 {k.name}</button>)}
-            <div className="menu-title">Synths</div>
-            {SYNTH_PRESETS.map((p) => <button key={p.name} onClick={() => { st().addTrack('instrument', p); setAddMenu(false); }}>🎹 {p.name}</button>)}
+            {INSTRUMENT_CATEGORIES.filter((c) => c !== 'Sampler').map((cat) => (
+              <details key={cat} open={cat === 'Drums'}>
+                <summary className="menu-title">{categoryIcon(cat)} {cat}</summary>
+                {instrumentsInCategory(cat).map((p) => <button key={p.name} onClick={() => { st().addTrack('instrument', p); setAddMenu(false); }}>{p.name}</button>)}
+              </details>
+            ))}
           </div>
         )}
       </div>
@@ -145,6 +180,7 @@ export function useStudioShortcuts() {
         case 'Delete': case 'Backspace': if (st.selectedClipIds.length) st.removeClips(st.selectedClipIds); break;
         case 'l': case 'L': st.setLoop({ enabled: !st.session.loop.enabled }); break;
         case 'k': case 'K': st.toggleMetronome(); break;
+        case 'r': case 'R': void toggleRecording(); break;
         case 'm': case 'M': if (st.selectedTrackId) { const t = st.session.tracks.find((t) => t.id === st.selectedTrackId); if (t) st.updateTrack(t.id, { muted: !t.muted }, { commit: false }); } break;
         case '+': case '=': st.setPixelsPerSecond(st.pixelsPerSecond * 1.25); break;
         case '-': st.setPixelsPerSecond(st.pixelsPerSecond / 1.25); break;

@@ -69,10 +69,25 @@ project file and media library with the video editor:
 - **Effects** (per track and on the master bus): parametric **Equalizer with live spectrum** — drag
   bands, wheel = width, double-click to add a band, notch to kill a frequency — plus Filter,
   Compressor, Reverb, Echo/Delay (tempo-synced, ping-pong), Chorus, Distortion, Bitcrusher.
-- **Instruments** (all synthesized, no sample packs needed): 4 drum kits (808, Electro, Acoustic-ish,
-  Lo-fi) with a **step sequencer**, and 17 synth presets (sub / saw / acid / Reese / FM basses, leads,
-  e-piano, organ, bell, pads, pluck, chiptune, riser) with a **piano roll** and editable synth
-  parameters (oscillators, filter, envelope, glide, FM). Play with the computer keyboard (A W S E D…).
+- **Instruments** (all synthesized, no sample packs needed), organised by family: Drums (4 kits with a
+  **step sequencer**), Keys (grand/bright/upright piano, e-piano, Wurli, clavinet, harpsichord, organs,
+  accordion, celesta, music box), Strings (violin, viola, cello, double bass, ensemble, pizzicato, harp),
+  Woodwinds (flute, piccolo, clarinet, oboe, bassoon, recorder, pan flute), Brass (trumpet, trombone,
+  French horn, tuba, section, saxes), Guitars & Bass, Mallets & Percussion (marimba, vibraphone,
+  xylophone, glockenspiel, tubular bells, steel drum, kalimba, timpani), Voices, and synth basses /
+  leads / pads / FX — 60+ sounds with a **piano roll** and editable parameters. A **Sampler** turns any
+  recording or audio file into an instrument (🎹 in *Audio files*).
+- **Musical typing**: with an instrument track selected, keys A W S E D F T G Y H U J K… play it
+  (Z / X change octave, 1–9 velocity). In the piano roll, **Type notes** writes what you play at the step
+  cursor; **Record notes** (arm the track, play) records live into the pattern. Grid down to 1/64 and
+  triplets; hold **Alt** while dragging to place freely.
+- **Recording**: arm an audio track (●), press ● / `R`. Optional one-bar count-in, input device choice,
+  input monitoring. Takes are saved as WAV next to the project and appear in *Audio files*.
+- **Clip editor** (double-click an audio clip): waveform + **spectrogram**; drag a time × frequency
+  rectangle and **attenuate / remove / isolate** those frequencies (spectral repair); normalize,
+  region gain, loudness, trim, **pitch shift keeping tempo**, **time stretch**, noise reduction;
+  non-destructive playback settings (speed/pitch, gain, fade curves, reverse); a **clip-level effects
+  chain**. Every process creates a new WAV version — *Revert to original* is one click.
 - **Transport**: bars.beats display, BPM, loop region (Shift+drag on the ruler), metronome.
 - **Export** the mix as WAV / FLAC / MP3 / M4A / OGG, or **Send to video** to render it and drop it on
   the video timeline. From the video editor, *Open in Audio Studio* takes any clip's sound to a studio
@@ -88,6 +103,8 @@ project file and media library with the video editor:
 | S | Split selected clips (or clips under playhead) at playhead |
 | Delete / Backspace | Delete selected clips |
 | M | Mute / unmute selected clips |
+| R (studio) | Start / stop recording |
+| Z / X (studio) | Keyboard octave down / up |
 | T | Add a title at the playhead |
 | Ctrl+D | Duplicate selected clips |
 | Ctrl+A | Select all clips |

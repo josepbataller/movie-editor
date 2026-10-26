@@ -46,9 +46,10 @@ export default function StudioTimeline() {
     return () => el.removeEventListener('wheel', onWheel);
   }, []);
 
-  /** Snap to the musical grid and to other clips' edges. */
+  /** Snap to the musical grid and to other clips' edges (hold Alt while dragging to bypass). */
+  let altHeld = false;
   const snap = (t: number, ignoreIds: string[] = []): number => {
-    if (!snapOn) return Math.max(0, t);
+    if (!snapOn || altHeld) return Math.max(0, t);
     const step = beat * grid;
     const candidates = [Math.round(t / step) * step, st().currentTime];
     for (const c of st().session.clips) { if (!ignoreIds.includes(c.id)) candidates.push(c.start, c.start + c.duration); }
@@ -115,6 +116,7 @@ export default function StudioTimeline() {
     const ensure = () => { if (!committed) { useStudio.getState().commit(); committed = true; } };
     const move = (ev: MouseEvent) => {
       const dx = ev.clientX - startX;
+      altHeld = ev.altKey;
       if (mode === 'move' && !committed && Math.abs(dx) < 3) return;
       ensure();
       const s2 = useStudio.getState();
@@ -247,6 +249,8 @@ function StudioTrackHeader({ track, width }: { track: StudioTrack; width: number
   const st = useStudio.getState;
   const selected = useStudio((s) => s.selectedTrackId === track.id);
   const fxOpen = useStudio((s) => s.fxPanelTrackId === track.id);
+  const armed = useStudio((s) => s.armedTrackId === track.id);
+  const recording = useStudio((s) => s.recording && s.armedTrackId === track.id);
   const meterRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const engine = getEngine();
@@ -277,6 +281,8 @@ function StudioTrackHeader({ track, width }: { track: StudioTrack; width: number
       <div className="header-row">
         <button className={`tiny ${track.muted ? 'on mute' : ''}`} onClick={() => st().updateTrack(track.id, { muted: !track.muted }, { commit: false })} title="Mute (M)">M</button>
         <button className={`tiny ${track.solo ? 'on solo' : ''}`} onClick={() => st().updateTrack(track.id, { solo: !track.solo }, { commit: false })} title="Solo">S</button>
+        {track.kind === 'audio' && <button className={`tiny arm ${armed ? 'on' : ''} ${recording ? 'rec' : ''}`} onClick={() => st().armTrack(armed ? null : track.id)} title="Arm for recording (then press ● or R)">●</button>}
+        {track.kind === 'instrument' && <button className={`tiny arm ${armed ? 'on' : ''}`} onClick={() => st().armTrack(armed ? null : track.id)} title="Arm: while playing, notes you type are recorded into the pattern">●</button>}
         <button className={`tiny ${fxOpen ? 'on' : ''} ${track.effects.length ? 'has-fx' : ''}`} onClick={() => st().openFx(fxOpen ? null : track.id)} title="Effects">FX{track.effects.length ? ` ${track.effects.length}` : ''}</button>
         <input type="range" className="gain" min={0} max={1.5} step={0.01} value={track.gain} onPointerDown={() => st().commit()} onChange={(e) => st().updateTrack(track.id, { gain: Number(e.target.value) }, { commit: false })} title={`Volume ${Math.round(track.gain * 100)}%`} />
         <input type="range" className="pan" min={-1} max={1} step={0.01} value={track.pan} onPointerDown={() => st().commit()} onDoubleClick={() => st().updateTrack(track.id, { pan: 0 })} onChange={(e) => st().updateTrack(track.id, { pan: Number(e.target.value) }, { commit: false })} title={`Pan ${track.pan === 0 ? 'C' : track.pan < 0 ? `L${Math.round(-track.pan * 100)}` : `R${Math.round(track.pan * 100)}`}`} />
@@ -300,8 +306,8 @@ const StudioClipView = memo(function StudioClipView({ clip, track, toX, onDown }
   return (
     <div className={`sclip ${clip.type} ${selected ? 'selected' : ''}`} style={{ left, width, background: track.color + '55', borderColor: track.color }}
       onMouseDown={(e) => onDown(e, clip, 'move')}
-      onDoubleClick={(e) => { e.stopPropagation(); if (clip.type === 'pattern') st().openEditor(clip.id); else st().setCurrentTime(clip.start); }}
-      title={`${clip.name}\n${formatTime(clip.start, true)} → ${formatTime(clip.start + clip.duration, true)}${clip.type === 'pattern' ? '\nDouble-click to edit notes' : ''}`}>
+      onDoubleClick={(e) => { e.stopPropagation(); if (clip.type === 'pattern') st().openEditor(clip.id); else st().openClipEditor(clip.id); }}
+      title={`${clip.name}\n${formatTime(clip.start, true)} → ${formatTime(clip.start + clip.duration, true)}\nDouble-click to ${clip.type === 'pattern' ? 'edit notes' : 'open the clip editor (spectrogram, pitch, effects)'}`}>
       <div className="sclip-label"><span>{clip.name}</span>{clip.type === 'sample' && clip.rate !== 1 && <span className="badge">{clip.rate.toFixed(2)}×</span>}{clip.type === 'sample' && clip.reverse && <span className="badge">rev</span>}{clip.gain !== 1 && <span className="badge">{Math.round(clip.gain * 100)}%</span>}</div>
       {clip.type === 'sample' ? <WaveCanvas clip={clip} width={width} height={track.height - 22} color={track.color} /> : <NotesPreview clip={clip} width={width} height={track.height - 22} color={track.color} drums={track.instrument?.kind === 'drums'} />}
       {/* fades */}

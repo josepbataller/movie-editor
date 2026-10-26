@@ -13,7 +13,10 @@ const api = {
   /** Encode a WAV to mp3/flac/aac/ogg with FFmpeg. */
   encodeAudio: (wavPath: string, outPath: string, format: string, bitrate?: string): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('audio:encode', wavPath, outPath, format, bitrate),
   audioExportDialog: (defaultName: string, format: string): Promise<string | null> => ipcRenderer.invoke('dialog:exportAudio', defaultName, format),
+  /** Offline FFmpeg processing of a WAV (pitch shift, time stretch, denoise, loudness) -> new temp WAV path. */
+  processAudio: (inPath: string, op: { type: 'pitch'; semitones: number } | { type: 'tempo'; factor: number } | { type: 'denoise'; strength: number } | { type: 'loudnorm' } | { type: 'filter'; graph: string }): Promise<{ ok: boolean; path?: string; error?: string }> => ipcRenderer.invoke('audio:process', inPath, op),
   tempPath: (name: string): Promise<string> => ipcRenderer.invoke('app:tempPath', name),
+  ensureDir: (dir: string): Promise<void> => ipcRenderer.invoke('fs:ensureDir', dir),
 
   saveProjectDialog: (defaultName: string): Promise<string | null> => ipcRenderer.invoke('dialog:saveProject', defaultName),
   openProjectDialog: (): Promise<string | null> => ipcRenderer.invoke('dialog:openProject'),
@@ -73,6 +76,7 @@ const api = {
   /** Debug: `--studio-play=<seconds>` plays the studio session for N seconds (surfaces scheduling errors) and quits. */
   startupStudioPlay: Number(process.argv.find((a) => a.startsWith('--studio-play='))?.slice(14) ?? 0) || 0,
   startupStudioFx: process.argv.find((a) => a.startsWith('--studio-fx='))?.slice(12) ?? null,
+  startupStudioClip: process.argv.find((a) => a.startsWith('--studio-clip='))?.slice(14) ?? null,
   startupStudioEditor: process.argv.find((a) => a.startsWith('--studio-editor='))?.slice(16) ?? null,
   /** Debug: `--seek=<seconds>` positions the playhead after the startup project loads. */
   startupSeek: Number(process.argv.find((a) => a.startsWith('--seek='))?.slice(7) ?? 0) || 0,

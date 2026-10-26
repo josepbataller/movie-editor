@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useStudio, sessionDuration } from '@/store/useStudio';
 import { useProject } from '@/store/useProject';
 import { getEngine } from '@/engine/audio/engine';
+import { stopRecording } from '@/engine/audio/recording';
 
 /**
  * Keeps the Web Audio engine in sync with the studio store:
@@ -28,7 +29,7 @@ export function useEngineSync() {
       if (s.session !== prev.session) applySession();
       if (s.playing !== prev.playing) {
         if (s.playing) void engine.play(s.currentTime);
-        else engine.stop();
+        else { engine.stop(); if (s.recording) void stopRecording(); }
       } else if (s.currentTime !== prev.currentTime && s.currentTime !== lastSeekFromStore) {
         engine.seek(s.currentTime); // user seek (ruler, keys) — also while playing
       }

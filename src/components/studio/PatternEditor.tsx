@@ -8,7 +8,6 @@ import { DRUM_KITS, SYNTH_PRESETS } from '@/engine/audio/presets';
 // plus quick instrument controls. Click = add/toggle, drag = move, drag right edge = length,
 // right-click = delete, Shift+click = cycle velocity. The computer keyboard plays notes.
 
-const KEY_ROW = 'awsedftgyhujkolp;'; // C D# style layout starting at the base octave
 
 export default function PatternEditor({ clipId }: { clipId: string }) {
   const clip = useStudio((s) => s.session.clips.find((c) => c.id === clipId && c.type === 'pattern') as PatternClip | undefined);
@@ -42,6 +41,7 @@ export default function PatternEditor({ clipId }: { clipId: string }) {
           </select>
         </label>
         <button className="small" onClick={() => st().setNotes(clip.id, [])} disabled={!clip.notes.length}>Clear</button>
+        <StepInputControls clip={clip} />
         <span className="dim small" style={{ marginLeft: 8 }}>{isDrums ? 'Click a cell to toggle · Shift+click: accent' : 'Click: add note · drag: move · right edge: length · right-click: delete · keys A W S E D…: play'}</span>
         <span style={{ marginLeft: 'auto' }} />
         <button className="small" onClick={() => st().openEditor(null)} title="Close">✕</button>
@@ -55,6 +55,32 @@ export default function PatternEditor({ clipId }: { clipId: string }) {
 }
 
 // ---------------------------------------------------------------------------
+
+/** Step-input (type notes) controls and keyboard octave. */
+function StepInputControls({ clip }: { clip: PatternClip }) {
+  const st = useStudio.getState;
+  const stepInput = useStudio((s) => s.stepInput);
+  const cursor = useStudio((s) => s.stepCursor);
+  const octave = useStudio((s) => s.keyboardOctave);
+  const armed = useStudio((s) => s.armedTrackId === clip.trackId);
+  const beatsPerBar = useStudio((s) => s.session.beatsPerBar);
+  const grid = useStudio((s) => s.gridDivision);
+  return (
+    <>
+      <button className={`small ${stepInput ? 'on' : ''}`} onClick={() => st().setStepInput(!stepInput)} title="Type notes with the computer keyboard at the step cursor; the cursor advances by the grid">⌨ Type notes</button>
+      {stepInput && (
+        <span className="small dim">
+          cursor {Math.floor(cursor / beatsPerBar) + 1}.{(cursor % beatsPerBar) + 1}
+          <button className="tiny" onClick={() => st().setStepCursor(cursor - grid)}>◀</button>
+          <button className="tiny" onClick={() => st().setStepCursor(Math.min(clip.lengthBeats, cursor + grid))} title="Rest / skip a step">▶</button>
+          <button className="tiny" onClick={() => st().setStepCursor(0)}>⟲</button>
+        </span>
+      )}
+      <span className="small dim">octave <button className="tiny" onClick={() => st().setKeyboardOctave(octave - 1)}>Z</button> C{octave} <button className="tiny" onClick={() => st().setKeyboardOctave(octave + 1)}>X</button></span>
+      <button className={`small arm ${armed ? 'on' : ''}`} onClick={() => st().armTrack(armed ? null : clip.trackId)} title="Arm: while playing, notes you type are recorded into this pattern">● {armed ? 'Recording notes' : 'Record notes'}</button>
+    </>
+  );
+}
 
 function usePatternPlayhead(clip: PatternClip): number | null {
   const t = useStudio((s) => s.currentTime);
@@ -125,7 +151,8 @@ function PianoRoll({ clip, grid, trackId }: { clip: PatternClip; grid: number; t
   const beatsPerBar = st().session.beatsPerBar;
   const pitchAtY = (y: number) => HIGH - Math.floor(y / ROW_H);
   const yOfPitch = (p: number) => (HIGH - p) * ROW_H;
-  const snapBeat = (b: number) => Math.round(b / grid) * grid;
+  const freeRef = useRef(false);
+  const snapBeat = (b: number) => (freeRef.current ? Math.round(b * 192) / 192 : Math.round(b / grid) * grid);
 
   // open centred on the clip's notes (or around C4 when empty)
   useEffect(() => {
@@ -134,30 +161,11 @@ function PianoRoll({ clip, grid, trackId }: { clip: PatternClip; grid: number; t
     el.scrollTop = Math.max(0, yOfPitch(centre) - el.clientHeight / 2);
   }, [clip.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // computer keyboard playing
-  useEffect(() => {
-    const down = new Set<number>();
-    const releaseAll = () => { for (const p of down) getEngine().noteOff(trackId, p); down.clear(); };
-    const onKey = (e: KeyboardEvent) => {
-      const idx = KEY_ROW.indexOf(e.key.toLowerCase());
-      if (idx < 0 || e.ctrlKey || e.metaKey) return;
-      const pitch = 60 + idx;
-      if (e.type === 'keydown') {
-        const tgt = e.target as HTMLElement;
-        if (tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.tagName === 'SELECT')) return;
-        if (down.has(pitch)) return;
-        down.add(pitch); void getEngine().noteOn(trackId, pitch);
-      } else {
-        // key-up is honoured even when focus moved to a control, so notes never get stuck
-        if (down.delete(pitch)) getEngine().noteOff(trackId, pitch);
-      }
-    };
-    window.addEventListener('keydown', onKey); window.addEventListener('keyup', onKey); window.addEventListener('blur', releaseAll);
-    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('keyup', onKey); window.removeEventListener('blur', releaseAll); releaseAll(); };
-  }, [trackId]);
+  // (computer-keyboard playing is handled globally by useMusicalTyping)
 
   const onGridDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
+    freeRef.current = e.altKey;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const x = e.clientX - rect.left, y = e.clientY - rect.top;
     const pitch = pitchAtY(y);
@@ -178,6 +186,7 @@ function PianoRoll({ clip, grid, trackId }: { clip: PatternClip; grid: number; t
 
   const onNoteDown = (e: React.MouseEvent, n: NoteEvent, mode: 'move' | 'resize') => {
     e.stopPropagation();
+    freeRef.current = e.altKey;
     if (e.button === 2) { st().removeNotes(clip.id, [n.id]); return; }
     if (e.button !== 0) return;
     setSelected(n.id);
@@ -212,7 +221,8 @@ function PianoRoll({ clip, grid, trackId }: { clip: PatternClip; grid: number; t
     <div className="piano-roll">
       <div className="pr-tools">
         <span className="dim small">Zoom</span>
-        <input type="range" min={16} max={160} value={pxPerBeat} onChange={(e) => setPxPerBeat(Number(e.target.value))} />
+        <input type="range" min={16} max={480} value={pxPerBeat} onChange={(e) => setPxPerBeat(Number(e.target.value))} />
+        <span className="dim small">Hold Alt while dragging to place notes freely (no grid).</span>
       </div>
       <div className="pr-scroll" ref={wrapRef}>
         <div className="pr-inner" style={{ width: 60 + W, height: H }}>
@@ -236,11 +246,19 @@ function PianoRoll({ clip, grid, trackId }: { clip: PatternClip; grid: number; t
               </div>
             ))}
             {playBeat != null && <div className="pr-playhead" style={{ left: playBeat * pxPerBeat }} />}
+            <StepCursorLine pxPerBeat={pxPerBeat} />
           </div>
         </div>
       </div>
     </div>
   );
+}
+
+function StepCursorLine({ pxPerBeat }: { pxPerBeat: number }) {
+  const on = useStudio((s) => s.stepInput);
+  const cursor = useStudio((s) => s.stepCursor);
+  if (!on) return null;
+  return <div className="pr-stepcursor" style={{ left: cursor * pxPerBeat }} title="Step-input cursor" />;
 }
 
 // ---------------------------------------------------------------------------

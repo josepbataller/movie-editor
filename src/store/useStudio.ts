@@ -3,7 +3,7 @@ import {
   AudioSession, StudioTrack, StudioClip, SampleClip, PatternClip, NoteEvent, AudioEffect, AudioEffectType,
   InstrumentSettings, StudioTrackKind, defaultSession, defaultEffect, uidA, TRACK_COLORS, beatsToSeconds, secondsToBeats,
 } from '@/shared/audioTypes';
-import { DRUM_KITS, SYNTH_PRESETS } from '@/engine/audio/presets';
+import { DRUM_KITS, SYNTH_PRESETS, instrumentByName } from '@/engine/audio/presets';
 
 // Audio Studio store: the DAW session (persisted in the project file as `project.audio`),
 // its undo history, and transient UI state. Mirrors the conventions of useProject:
@@ -26,9 +26,21 @@ interface StudioState {
   snapToGrid: boolean;
   gridDivision: number;      // beats per grid step (1 = quarter, 0.25 = sixteenth)
   editorClipId: string | null;   // pattern clip open in the piano roll / step sequencer
+  clipEditorId: string | null;   // sample clip open in the clip editor (waveform / spectrogram / tools)
   fxPanelTrackId: string | null | 'master';
-  recordArmed: boolean;
   previewNote: { trackId: string; pitch: number } | null;
+
+  // recording
+  armedTrackId: string | null;
+  recording: boolean;
+  inputDeviceId: string | null;
+  monitorInput: boolean;
+  countIn: boolean;
+
+  // musical typing
+  keyboardOctave: number;        // base octave for the computer keyboard (4 = C4 on 'A')
+  stepInput: boolean;            // typing writes notes into the open pattern
+  stepCursor: number;            // beats, position of the step-input cursor
 
   setSession: (s: AudioSession | undefined) => void;
   reset: () => void;
@@ -84,16 +96,52 @@ interface StudioState {
   toggleSnap: () => void;
   setGridDivision: (d: number) => void;
   openEditor: (clipId: string | null) => void;
+  openClipEditor: (clipId: string | null) => void;
   openFx: (target: string | null | 'master') => void;
   setPreviewNote: (n: { trackId: string; pitch: number } | null) => void;
+
+  // recording / typing
+  armTrack: (trackId: string | null) => void;
+  setRecording: (on: boolean) => void;
+  setInputDevice: (id: string | null) => void;
+  setMonitorInput: (on: boolean) => void;
+  setCountIn: (on: boolean) => void;
+  setKeyboardOctave: (o: number) => void;
+  setStepInput: (on: boolean) => void;
+  setStepCursor: (beats: number) => void;
+
+  /** Swap the audio a sample clip plays (render-in-place). Keeps the original as sourceAssetId. */
+  replaceClipAudio: (clipId: string, newAssetId: string, newDuration: number) => void;
+  revertClipAudio: (clipId: string) => void;
+  /** Add an instrument track that plays a recorded/imported sound at different pitches. */
+  addSamplerTrack: (assetId: string, name: string, rootNote?: number) => string;
+}
+
+/** Older files / hand-written sessions: fill instruments from the factory preset of the same name. */
+function normalizeSession(s: AudioSession): AudioSession {
+  return {
+    ...s,
+    tracks: s.tracks.map((t) => {
+      const inst = t.instrument as (InstrumentSettings & { __name?: string }) | undefined;
+      if (!inst) return t;
+      const preset = instrumentByName(inst.__name ?? inst.name);
+      if (!preset) return t;
+      const { __name, ...rest } = inst;
+      return { ...t, instrument: { ...preset, ...rest, name: preset.name } as InstrumentSettings };
+    }),
+  };
 }
 
 /** Drop UI references to clips/tracks that no longer exist in `next`. */
-function pruneUi(s: { selectedClipIds: string[]; editorClipId: string | null; fxPanelTrackId: string | null | 'master' }, next: AudioSession) {
+function pruneUi(s: { selectedClipIds: string[]; editorClipId: string | null; clipEditorId: string | null; fxPanelTrackId: string | null | 'master'; armedTrackId: string | null }, next: AudioSession) {
+  const hasClip = (id: string | null) => !!id && next.clips.some((c) => c.id === id);
+  const hasTrack = (id: string | null) => !!id && next.tracks.some((t) => t.id === id);
   return {
     selectedClipIds: s.selectedClipIds.filter((id) => next.clips.some((c) => c.id === id)),
-    editorClipId: s.editorClipId && next.clips.some((c) => c.id === s.editorClipId) ? s.editorClipId : null,
-    fxPanelTrackId: s.fxPanelTrackId === 'master' || (s.fxPanelTrackId && next.tracks.some((t) => t.id === s.fxPanelTrackId)) ? s.fxPanelTrackId : null,
+    editorClipId: hasClip(s.editorClipId) ? s.editorClipId : null,
+    clipEditorId: hasClip(s.clipEditorId) ? s.clipEditorId : null,
+    fxPanelTrackId: s.fxPanelTrackId === 'master' || hasTrack(s.fxPanelTrackId) || hasClip(s.fxPanelTrackId) ? s.fxPanelTrackId : null,
+    armedTrackId: hasTrack(s.armedTrackId) ? s.armedTrackId : null,
   };
 }
 
@@ -122,12 +170,19 @@ export const useStudio = create<StudioState>((set, get) => {
     }
     return start;
   };
-  const effectsOf = (s: AudioSession, target: string | 'master') =>
-    target === 'master' ? s.masterEffects : s.tracks.find((t) => t.id === target)?.effects ?? [];
-  const withEffects = (s: AudioSession, target: string | 'master', effects: AudioEffect[]): Partial<AudioSession> =>
-    target === 'master'
-      ? { masterEffects: effects }
-      : { tracks: s.tracks.map((t) => (t.id === target ? { ...t, effects } : t)) };
+  // Effect chains live on the master bus, on tracks, or on sample clips (target = clip id).
+  const effectsOf = (s: AudioSession, target: string | 'master'): AudioEffect[] => {
+    if (target === 'master') return s.masterEffects;
+    const track = s.tracks.find((t) => t.id === target);
+    if (track) return track.effects;
+    const clip = s.clips.find((c) => c.id === target);
+    return clip && clip.type === 'sample' ? clip.effects ?? [] : [];
+  };
+  const withEffects = (s: AudioSession, target: string | 'master', effects: AudioEffect[]): Partial<AudioSession> => {
+    if (target === 'master') return { masterEffects: effects };
+    if (s.tracks.some((t) => t.id === target)) return { tracks: s.tracks.map((t) => (t.id === target ? { ...t, effects } : t)) };
+    return { clips: s.clips.map((c) => (c.id === target && c.type === 'sample' ? { ...c, effects } : c)) };
+  };
 
   return {
     session: defaultSession(),
@@ -142,11 +197,19 @@ export const useStudio = create<StudioState>((set, get) => {
     snapToGrid: true,
     gridDivision: 0.25,
     editorClipId: null,
+    clipEditorId: null,
     fxPanelTrackId: null,
-    recordArmed: false,
     previewNote: null,
+    armedTrackId: null,
+    recording: false,
+    inputDeviceId: null,
+    monitorInput: false,
+    countIn: true,
+    keyboardOctave: 4,
+    stepInput: false,
+    stepCursor: 0,
 
-    setSession: (s) => set({ session: s ? { ...defaultSession(), ...s } : defaultSession(), dirty: false, past: [], future: [], selectedClipIds: [], editorClipId: null, fxPanelTrackId: null, currentTime: 0, playing: false }),
+    setSession: (s) => set({ session: s ? normalizeSession({ ...defaultSession(), ...s }) : defaultSession(), dirty: false, past: [], future: [], selectedClipIds: [], editorClipId: null, clipEditorId: null, fxPanelTrackId: null, armedTrackId: null, recording: false, currentTime: 0, playing: false }),
     reset: () => get().setSession(undefined),
     markSaved: () => set({ dirty: false }),
     commit: () => set((s) => ({ past: [...s.past.slice(-99), s.session], future: [] })),
@@ -309,7 +372,7 @@ export const useStudio = create<StudioState>((set, get) => {
     },
     removeClips: (ids) => {
       mutate((s) => ({ clips: s.clips.filter((c) => !ids.includes(c.id)) }));
-      set((s) => ({ selectedClipIds: s.selectedClipIds.filter((i) => !ids.includes(i)), editorClipId: ids.includes(s.editorClipId ?? '') ? null : s.editorClipId }));
+      set((s) => ({ selectedClipIds: s.selectedClipIds.filter((i) => !ids.includes(i)), editorClipId: ids.includes(s.editorClipId ?? '') ? null : s.editorClipId, clipEditorId: ids.includes(s.clipEditorId ?? '') ? null : s.clipEditorId }));
     },
 
     addNote: (clipId, note) => {
@@ -355,9 +418,33 @@ export const useStudio = create<StudioState>((set, get) => {
     setPixelsPerSecond: (pps) => set({ pixelsPerSecond: Math.min(800, Math.max(8, pps)) }),
     toggleSnap: () => set((s) => ({ snapToGrid: !s.snapToGrid })),
     setGridDivision: (gridDivision) => set({ gridDivision }),
-    openEditor: (editorClipId) => set({ editorClipId }),
+    openEditor: (editorClipId) => set(editorClipId ? { editorClipId, clipEditorId: null, stepCursor: 0 } : { editorClipId: null, stepCursor: 0 }),
+    openClipEditor: (clipEditorId) => set(clipEditorId ? { clipEditorId, editorClipId: null } : { clipEditorId: null }),
     openFx: (fxPanelTrackId) => set({ fxPanelTrackId }),
     setPreviewNote: (previewNote) => set({ previewNote }),
+    armTrack: (armedTrackId) => set({ armedTrackId }),
+    setRecording: (recording) => set({ recording }),
+    setInputDevice: (inputDeviceId) => set({ inputDeviceId }),
+    setMonitorInput: (monitorInput) => set({ monitorInput }),
+    setCountIn: (countIn) => set({ countIn }),
+    setKeyboardOctave: (o) => set({ keyboardOctave: Math.min(8, Math.max(0, o)) }),
+    setStepInput: (stepInput) => set({ stepInput }),
+    setStepCursor: (stepCursor) => set({ stepCursor: Math.max(0, stepCursor) }),
+    replaceClipAudio: (clipId, newAssetId, newDuration) => mutate((s) => ({
+      clips: s.clips.map((c) => (c.id === clipId && c.type === 'sample'
+        ? { ...c, sourceAssetId: c.sourceAssetId ?? c.assetId, original: c.original ?? { assetId: c.assetId, inPoint: c.inPoint, rate: c.rate, reverse: c.reverse, duration: c.duration },
+            assetId: newAssetId, inPoint: 0, duration: newDuration, rate: 1, reverse: false }
+        : c)),
+    })),
+    revertClipAudio: (clipId) => mutate((s) => ({
+      clips: s.clips.map((c) => (c.id === clipId && c.type === 'sample' && c.original
+        ? { ...c, assetId: c.original.assetId, inPoint: c.original.inPoint, rate: c.original.rate, reverse: c.original.reverse, duration: c.original.duration, original: undefined, sourceAssetId: undefined }
+        : c)),
+    })),
+    addSamplerTrack: (assetId, name, rootNote = 60) => {
+      const inst: InstrumentSettings = { kind: 'sampler', name: name.replace(/\.[^.]+$/, ''), category: 'Sampler', assetId, rootNote, loop: false, attack: 0.003, release: 0.15, gain: 0.9 };
+      return get().addTrack('instrument', inst);
+    },
   };
 });
 

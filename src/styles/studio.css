@@ -137,3 +137,32 @@ button.tiny.has-fx { color: #ffd166; }
 .ws-switch { display: flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 .ws-switch button { border: none; border-radius: 0; padding: 5px 12px; }
 .ws-switch button.on { background: var(--accent); color: #fff; }
+
+/* ---------- recording / arming ---------- */
+button.rec { color: #ff5252; font-size: 16px; line-height: 1; }
+button.rec.on { background: #d9534f; border-color: #d9534f; color: #fff; animation: blink 1s infinite; }
+button.arm { color: #ff8a80; }
+button.arm.on { background: #a33; border-color: #a33; color: #fff; }
+button.arm.rec { animation: blink 1s infinite; }
+@keyframes blink { 50% { opacity: 0.45; } }
+.browser-group.clickable { cursor: pointer; user-select: none; }
+.browser-group.clickable:hover { color: var(--text); }
+.add-track .menu details summary { cursor: pointer; list-style: none; }
+.add-track .menu details button { padding-left: 22px; }
+.tabs.inline { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.tabs.inline button { padding: 4px 10px; }
+.pr-stepcursor { position: absolute; top: 0; bottom: 0; width: 2px; background: #ffd166; pointer-events: none; box-shadow: 0 0 6px #ffd166; }
+
+/* ---------- clip editor ---------- */
+.clip-editor { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.ce-body { display: flex; min-height: 0; flex: 1; }
+.ce-canvases { flex: 1; min-width: 0; overflow: auto; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+.ce-wave, .ce-spec { width: 100%; display: block; border-radius: 4px; cursor: crosshair; }
+.ce-wave { height: 90px; } .ce-spec { height: 220px; }
+.ce-tools { width: 430px; border-left: 1px solid var(--border); overflow-y: auto; padding: 6px 10px; display: flex; flex-direction: column; gap: 8px; }
+.ce-group { border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 8px; background: var(--panel-2); }
+.ce-title { font-weight: 600; margin-bottom: 4px; }
+.ce-group .knob { width: 100%; flex-direction: row; align-items: center; gap: 8px; }
+.ce-group .knob-label { width: 90px; }
+.ce-group .knob input[type="range"] { flex: 1; }
+.ce-group .knob-value { width: 110px; text-align: right; }

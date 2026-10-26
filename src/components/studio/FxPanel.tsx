@@ -9,12 +9,19 @@ import { eqResponse } from '@/engine/audio/effects';
 
 const ADDABLE: AudioEffectType[] = ['eq', 'filter', 'compressor', 'reverb', 'delay', 'chorus', 'distortion', 'bitcrusher'];
 
-export default function FxPanel({ target }: { target: string | 'master' }) {
+export default function FxPanel({ target, embedded = false }: { target: string | 'master'; embedded?: boolean }) {
   const st = useStudio.getState;
   const track = useStudio((s) => (target === 'master' ? null : s.session.tracks.find((t) => t.id === target)));
-  const effects = useStudio((s) => (target === 'master' ? s.session.masterEffects : s.session.tracks.find((t) => t.id === target)?.effects)) ?? [];
+  const clip = useStudio((s) => (target === 'master' ? null : s.session.clips.find((c) => c.id === target)));
+  const effects = useStudio((s) => {
+    if (target === 'master') return s.session.masterEffects;
+    const t = s.session.tracks.find((t) => t.id === target);
+    if (t) return t.effects;
+    const c = s.session.clips.find((c) => c.id === target);
+    return c && c.type === 'sample' ? c.effects : undefined;
+  }) ?? [];
   const [adding, setAdding] = useState<AudioEffectType>('eq');
-  const title = target === 'master' ? 'Master bus' : track?.name ?? '';
+  const title = target === 'master' ? 'Master bus' : track?.name ?? (clip ? `clip "${clip.name}"` : '');
 
   return (
     <div className="fx-panel">
@@ -26,7 +33,7 @@ export default function FxPanel({ target }: { target: string | 'master' }) {
           {ADDABLE.map((t) => <option key={t} value={t}>{EFFECT_LABELS[t]}</option>)}
         </select>
         <button className="primary small" onClick={() => st().addEffect(target, adding)}>+ Add</button>
-        <button className="small" onClick={() => st().openFx(null)} title="Close">✕</button>
+        {!embedded && <button className="small" onClick={() => st().openFx(null)} title="Close">✕</button>}
       </div>
       <div className="fx-chain">
         {effects.length === 0 && <div className="dim small" style={{ padding: 16 }}>No effects yet. Add an Equalizer to shape frequencies, a Compressor to even out levels, Reverb/Delay for space…</div>}
@@ -40,7 +47,7 @@ export default function FxPanel({ target }: { target: string | 'master' }) {
               <button className="tiny" disabled={i === effects.length - 1} onClick={() => st().moveEffect(target, fx.id, 1)} title="Move later">▶</button>
               <button className="tiny" onClick={() => st().removeEffect(target, fx.id)} title="Remove">✕</button>
             </div>
-            <EffectBody fx={fx} target={target} analyserId={target} />
+            <EffectBody fx={fx} target={target} analyserId={clip ? clip.trackId : target} />
           </div>
         ))}
       </div>
