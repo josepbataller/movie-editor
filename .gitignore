@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-electron/
+release/
+tmp-test/
+
+# Generated test media and exports (recreate with `npm run test:media`)
+test-media/
+
+# Local tooling / IDE
+.claude/settings.local.json
+.claude/launch.json
+.idea/
+.vscode/
+*.iml
+
+# Environment & secrets
+.env
+.env.*
+
+# OS / misc
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+
+# Python leftovers (none expected, kept for safety)
+.venv/
+__pycache__/
