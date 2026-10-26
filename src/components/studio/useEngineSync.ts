@@ -29,8 +29,8 @@ export function useEngineSync() {
       if (s.playing !== prev.playing) {
         if (s.playing) void engine.play(s.currentTime);
         else engine.stop();
-      } else if (!s.playing && s.currentTime !== prev.currentTime && s.currentTime !== lastSeekFromStore) {
-        engine.seek(s.currentTime);
+      } else if (s.currentTime !== prev.currentTime && s.currentTime !== lastSeekFromStore) {
+        engine.seek(s.currentTime); // user seek (ruler, keys) — also while playing
       }
     });
     const unsubAssets = useProject.subscribe((s, prev) => {
@@ -60,6 +60,7 @@ export function useEngineSync() {
       unsub(); unsubAssets();
       cancelAnimationFrame(rafId);
       engine.stop();
+      useStudio.getState().setPlaying(false);
     };
   }, []);
 }

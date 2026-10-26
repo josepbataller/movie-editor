@@ -344,7 +344,7 @@ function WaveCanvas({ clip, width, height, color }: { clip: SampleClip; width: n
       const mn = pk[i * 2] * clip.gain, mx = pk[i * 2 + 1] * clip.gain;
       ctx.fillRect(x, mid - Math.max(0.5, mx * mid), 1, Math.max(1, (mx - mn) * mid));
     }
-  });
+  }, [clip.assetId, clip.inPoint, clip.duration, clip.rate, clip.reverse, clip.gain, width, height, color, asset]);
   return <canvas ref={ref} className="wave" />;
 }
 
@@ -370,7 +370,7 @@ function NotesPreview({ clip, width, height, color, drums }: { clip: PatternClip
       ctx.globalAlpha = 0.5 + n.velocity * 0.5;
       ctx.fillRect(x, h - (row + 1) * rowH, nw, Math.max(2, rowH - 1));
     }
-  });
+  }, [clip.notes, clip.lengthBeats, width, height, color, drums]);
   return <canvas ref={ref} className="wave" />;
 }
 

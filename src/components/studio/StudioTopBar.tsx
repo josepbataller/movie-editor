@@ -125,6 +125,12 @@ export function useStudioShortcuts() {
       if (typing) return;
       const st = useStudio.getState();
       const ctrl = e.ctrlKey || e.metaKey;
+      // while a synth pattern is open, plain letter keys belong to the piano roll's keyboard
+      if (!ctrl && /^[a-z;]$/i.test(e.key) && st.editorClipId) {
+        const clip = st.session.clips.find((c) => c.id === st.editorClipId);
+        const track = clip && st.session.tracks.find((t) => t.id === clip.trackId);
+        if (track?.instrument?.kind === 'synth') return;
+      }
       if (ctrl && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? st.redo() : st.undo(); return; }
       if (ctrl && e.key.toLowerCase() === 'y') { e.preventDefault(); st.redo(); return; }
       if (ctrl && e.key.toLowerCase() === 'd') { e.preventDefault(); if (st.selectedClipIds.length) st.duplicateClips(st.selectedClipIds); return; }

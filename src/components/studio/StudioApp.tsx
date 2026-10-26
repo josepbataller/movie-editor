@@ -15,8 +15,8 @@ import { useEngineSync } from './useEngineSync';
 export default function StudioApp() {
   useEngineSync();
   useStudioShortcuts();
-  const editorClipId = useStudio((s) => s.editorClipId);
-  const fxTarget = useStudio((s) => s.fxPanelTrackId);
+  const editorClipId = useStudio((s) => (s.editorClipId && s.session.clips.some((c) => c.id === s.editorClipId) ? s.editorClipId : null));
+  const fxTarget = useStudio((s) => (s.fxPanelTrackId === 'master' || (s.fxPanelTrackId && s.session.tracks.some((t) => t.id === s.fxPanelTrackId)) ? s.fxPanelTrackId : null));
   const [exportOpen, setExportOpen] = useState(false);
   const [bottomH, setBottomH] = useState(380);
   const dragRef = useRef<{ y: number; h: number } | null>(null);

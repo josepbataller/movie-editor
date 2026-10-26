@@ -11,6 +11,7 @@ import { newProjectAction, openProjectAction, saveProjectAction, loadProjectFrom
 import TitleStudio from './components/video/TitleStudio';
 import StudioApp from './components/studio/StudioApp';
 import { renderMixToWav } from './engine/audio/bridge';
+import { getEngine } from './engine/audio/engine';
 import { useStudio } from './store/useStudio';
 
 export default function App() {
@@ -85,6 +86,10 @@ export default function App() {
         if (window.api.startupWorkspace === 'audio') useProject.getState().setWorkspace('audio');
         if (window.api.startupStudioFx) useStudio.getState().openFx(window.api.startupStudioFx);
         if (window.api.startupStudioEditor) useStudio.getState().openEditor(window.api.startupStudioEditor);
+        if (window.api.startupStudioPlay) {
+          setTimeout(() => useStudio.getState().setPlaying(true), 800);
+          setTimeout(() => { const s = useStudio.getState(); const eng = getEngine(); console.warn(`[studio-play] position ${s.currentTime.toFixed(2)}s playing=${s.playing} engine=${eng.playing} ctx=${eng.ctx.state} ctxTime=${eng.ctx.currentTime.toFixed(2)} enginePos=${eng.position().toFixed(2)}`); s.setPlaying(false); window.api.closeNow(); }, 800 + window.api.startupStudioPlay * 1000);
+        }
         if (window.api.startupAudioExport) {
           try { await renderMixToWav(window.api.startupAudioExport); console.warn('[export-audio] done ' + window.api.startupAudioExport); }
           catch (e: any) { console.error('[export-audio] ' + (e?.message ?? e)); }

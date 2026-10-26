@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import {
   AudioSession, StudioTrack, StudioClip, SampleClip, PatternClip, NoteEvent, AudioEffect, AudioEffectType,
-  InstrumentSettings, StudioTrackKind, defaultSession, defaultEffect, uidA, TRACK_COLORS, beatsToSeconds,
+  InstrumentSettings, StudioTrackKind, defaultSession, defaultEffect, uidA, TRACK_COLORS, beatsToSeconds, secondsToBeats,
 } from '@/shared/audioTypes';
 import { DRUM_KITS, SYNTH_PRESETS } from '@/engine/audio/presets';
 
@@ -88,6 +88,15 @@ interface StudioState {
   setPreviewNote: (n: { trackId: string; pitch: number } | null) => void;
 }
 
+/** Drop UI references to clips/tracks that no longer exist in `next`. */
+function pruneUi(s: { selectedClipIds: string[]; editorClipId: string | null; fxPanelTrackId: string | null | 'master' }, next: AudioSession) {
+  return {
+    selectedClipIds: s.selectedClipIds.filter((id) => next.clips.some((c) => c.id === id)),
+    editorClipId: s.editorClipId && next.clips.some((c) => c.id === s.editorClipId) ? s.editorClipId : null,
+    fxPanelTrackId: s.fxPanelTrackId === 'master' || (s.fxPanelTrackId && next.tracks.some((t) => t.id === s.fxPanelTrackId)) ? s.fxPanelTrackId : null,
+  };
+}
+
 export function sessionDuration(s: AudioSession): number {
   return s.clips.reduce((m, c) => Math.max(m, c.start + c.duration), 0);
 }
@@ -144,17 +153,20 @@ export const useStudio = create<StudioState>((set, get) => {
     undo: () => set((s) => {
       const prev = s.past[s.past.length - 1];
       if (!prev) return {};
-      return { past: s.past.slice(0, -1), future: [s.session, ...s.future], session: prev, dirty: true,
-        selectedClipIds: s.selectedClipIds.filter((id) => prev.clips.some((c) => c.id === id)) };
+      return { past: s.past.slice(0, -1), future: [s.session, ...s.future], session: prev, dirty: true, ...pruneUi(s, prev) };
     }),
     redo: () => set((s) => {
       const next = s.future[0];
       if (!next) return {};
-      return { past: [...s.past, s.session], future: s.future.slice(1), session: next, dirty: true,
-        selectedClipIds: s.selectedClipIds.filter((id) => next.clips.some((c) => c.id === id)) };
+      return { past: [...s.past, s.session], future: s.future.slice(1), session: next, dirty: true, ...pruneUi(s, next) };
     }),
 
-    setBpm: (bpm) => mutate(() => ({ bpm: Math.min(300, Math.max(20, bpm)) })),
+    // Pattern clips live in beats: keep their timeline position/length musical when the tempo changes.
+    setBpm: (bpm) => mutate((s) => {
+      const nb = Math.min(300, Math.max(20, bpm));
+      const k = s.bpm / nb;
+      return { bpm: nb, clips: s.clips.map((c) => (c.type === 'pattern' ? { ...c, start: c.start * k, duration: beatsToSeconds(c.lengthBeats, nb) } : c)) };
+    }),
     setMasterGain: (g, opts) => mutate(() => ({ masterGain: Math.min(2, Math.max(0, g)) }), opts?.commit ?? true),
     setLoop: (patch) => mutate((s) => ({ loop: { ...s.loop, ...patch } }), false),
     toggleMetronome: () => mutate((s) => ({ metronome: !s.metronome }), false),
@@ -171,7 +183,10 @@ export const useStudio = create<StudioState>((set, get) => {
       set({ selectedTrackId: id });
       return id;
     },
-    removeTrack: (id) => mutate((s) => ({ tracks: s.tracks.filter((t) => t.id !== id), clips: s.clips.filter((c) => c.trackId !== id) })),
+    removeTrack: (id) => {
+      mutate((s) => ({ tracks: s.tracks.filter((t) => t.id !== id), clips: s.clips.filter((c) => c.trackId !== id) }));
+      set((s) => ({ ...pruneUi(s, s.session), selectedTrackId: s.selectedTrackId === id ? null : s.selectedTrackId }));
+    },
     updateTrack: (id, patch, opts) => mutate((s) => ({ tracks: s.tracks.map((t) => (t.id === id ? { ...t, ...patch } : t)) }), opts?.commit ?? true),
     moveTrack: (id, dir) => mutate((s) => {
       const i = s.tracks.findIndex((t) => t.id === id);
@@ -235,7 +250,20 @@ export const useStudio = create<StudioState>((set, get) => {
         if (c.type === 'sample' && srcDuration != null) d = Math.min(d, (srcDuration - inPoint) / rate - duration);
         duration += d;
       }
-      return { clips: s.clips.map((x) => (x.id === id ? (x.type === 'sample' ? { ...x, start, duration, inPoint } : { ...x, start, duration }) : x)) };
+      return {
+        clips: s.clips.map((x) => {
+          if (x.id !== id) return x;
+          if (x.type === 'sample') return { ...x, start, duration, inPoint };
+          // pattern: content is trimmed, not shifted — notes move by the removed beats
+          const db = secondsToBeats(start - x.start, s.bpm);
+          const lengthBeats = secondsToBeats(duration, s.bpm);
+          const notes = x.notes
+            .map((n) => ({ ...n, start: n.start - db }))
+            .filter((n) => n.start + n.length > 1e-6 && n.start < lengthBeats - 1e-6)
+            .map((n) => (n.start < 0 ? { ...n, length: n.length + n.start, start: 0 } : n));
+          return { ...x, start, duration, lengthBeats, notes };
+        }),
+      };
     }, opts?.commit ?? true),
     splitClipAt: (id, time) => mutate((s) => {
       const c = s.clips.find((c) => c.id === id);

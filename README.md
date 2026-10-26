@@ -56,6 +56,28 @@ For development with hot reload: `npm run dev`.
    *Linked clips → Unlink* / *Separate audio* in the inspector, or turn the behaviour off in
    Project settings → Import options.
 
+## Audio Studio (music & sound editing)
+
+Switch with the **Video | Audio Studio** toggle in the top bar. It is a small DAW that shares the
+project file and media library with the video editor:
+
+- **Tracks**: audio tracks (your recordings / music files) and instrument tracks. Mixer per track:
+  volume, pan, mute, solo, level meter, effects chain.
+- **Clips**: drag from the *Audio files* browser; trim edges, split (`S`), move between tracks,
+  drag the corner handles for fade in / fade out (linear, exponential or S-curve), gain, speed/pitch,
+  reverse. Snap to a musical grid (bar, 1/4 … 1/32, triplets) at the project BPM.
+- **Effects** (per track and on the master bus): parametric **Equalizer with live spectrum** — drag
+  bands, wheel = width, double-click to add a band, notch to kill a frequency — plus Filter,
+  Compressor, Reverb, Echo/Delay (tempo-synced, ping-pong), Chorus, Distortion, Bitcrusher.
+- **Instruments** (all synthesized, no sample packs needed): 4 drum kits (808, Electro, Acoustic-ish,
+  Lo-fi) with a **step sequencer**, and 17 synth presets (sub / saw / acid / Reese / FM basses, leads,
+  e-piano, organ, bell, pads, pluck, chiptune, riser) with a **piano roll** and editable synth
+  parameters (oscillators, filter, envelope, glide, FM). Play with the computer keyboard (A W S E D…).
+- **Transport**: bars.beats display, BPM, loop region (Shift+drag on the ruler), metronome.
+- **Export** the mix as WAV / FLAC / MP3 / M4A / OGG, or **Send to video** to render it and drop it on
+  the video timeline. From the video editor, *Open in Audio Studio* takes any clip's sound to a studio
+  track for detailed work.
+
 ## Keyboard shortcuts
 
 | Key | Action |

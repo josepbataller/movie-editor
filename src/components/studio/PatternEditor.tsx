@@ -137,18 +137,23 @@ function PianoRoll({ clip, grid, trackId }: { clip: PatternClip; grid: number; t
   // computer keyboard playing
   useEffect(() => {
     const down = new Set<number>();
+    const releaseAll = () => { for (const p of down) getEngine().noteOff(trackId, p); down.clear(); };
     const onKey = (e: KeyboardEvent) => {
-      const tgt = e.target as HTMLElement;
-      if (tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.tagName === 'SELECT')) return;
       const idx = KEY_ROW.indexOf(e.key.toLowerCase());
       if (idx < 0 || e.ctrlKey || e.metaKey) return;
-      const semis = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16][idx];
-      const pitch = 60 + semis;
-      if (e.type === 'keydown') { if (down.has(pitch)) return; down.add(pitch); void getEngine().noteOn(trackId, pitch); }
-      else { down.delete(pitch); getEngine().noteOff(trackId, pitch); }
+      const pitch = 60 + idx;
+      if (e.type === 'keydown') {
+        const tgt = e.target as HTMLElement;
+        if (tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.tagName === 'SELECT')) return;
+        if (down.has(pitch)) return;
+        down.add(pitch); void getEngine().noteOn(trackId, pitch);
+      } else {
+        // key-up is honoured even when focus moved to a control, so notes never get stuck
+        if (down.delete(pitch)) getEngine().noteOff(trackId, pitch);
+      }
     };
-    window.addEventListener('keydown', onKey); window.addEventListener('keyup', onKey);
-    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('keyup', onKey); };
+    window.addEventListener('keydown', onKey); window.addEventListener('keyup', onKey); window.addEventListener('blur', releaseAll);
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('keyup', onKey); window.removeEventListener('blur', releaseAll); releaseAll(); };
   }, [trackId]);
 
   const onGridDown = (e: React.MouseEvent) => {
@@ -240,17 +245,21 @@ function PianoRoll({ clip, grid, trackId }: { clip: PatternClip; grid: number; t
 
 // ---------------------------------------------------------------------------
 
+/** Labelled slider for instrument parameters (module-level so re-renders don't remount it mid-drag). */
+function K({ label, value, min, max, step = 0.01, onChange, fmt }: { label: string; value: number; min: number; max: number; step?: number; onChange: (v: number) => void; fmt?: (v: number) => string }) {
+  return (
+    <label className="knob"><span className="knob-label">{label}</span>
+      <input type="range" min={min} max={max} step={step} value={value} onPointerDown={() => useStudio.getState().commit()} onChange={(e) => onChange(Number(e.target.value))} />
+      <span className="knob-value">{fmt ? fmt(value) : Number(value.toFixed(2))}</span></label>
+  );
+}
+
 function InstrumentControls({ trackId }: { trackId: string }) {
   const track = useStudio((s) => s.session.tracks.find((t) => t.id === trackId));
   const st = useStudio.getState;
   const inst = track?.instrument;
   if (!inst) return null;
   const upd = (patch: Record<string, unknown>) => st().updateInstrument(trackId, patch as Partial<typeof inst>, { commit: false });
-  const K = ({ label, value, min, max, step = 0.01, onChange, fmt }: { label: string; value: number; min: number; max: number; step?: number; onChange: (v: number) => void; fmt?: (v: number) => string }) => (
-    <label className="knob"><span className="knob-label">{label}</span>
-      <input type="range" min={min} max={max} step={step} value={value} onPointerDown={() => st().commit()} onChange={(e) => onChange(Number(e.target.value))} />
-      <span className="knob-value">{fmt ? fmt(value) : Number(value.toFixed(2))}</span></label>
-  );
   if (inst.kind === 'drums') {
     const d = inst as DrumKitPatch;
     return (

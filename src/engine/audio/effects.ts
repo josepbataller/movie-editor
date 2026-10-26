@@ -7,8 +7,8 @@ import type { AudioEffect, EqBand } from '@/shared/audioTypes';
 export interface FxNode {
   input: AudioNode;
   output: AudioNode;
-  /** Apply parameter changes without rebuilding (same effect type). */
-  update: (fx: AudioEffect) => void;
+  /** Apply parameter changes without rebuilding (same effect type). `bpm` matters for tempo-synced effects. */
+  update: (fx: AudioEffect, bpm: number) => void;
   dispose: () => void;
 }
 
@@ -111,8 +111,8 @@ function buildDelay(ctx: BaseAudioContext, fx: Extract<AudioEffect, { type: 'del
   dL.connect(dR); dR.connect(panR); panR.connect(merge);
   dR.connect(tone); tone.connect(fb); fb.connect(dL);
   merge.connect(m.wet);
-  const apply = (x: typeof fx) => {
-    const t = x.sync ? (60 / bpm) * x.division : x.time;
+  const apply = (x: typeof fx, tempo = bpm) => {
+    const t = x.sync ? (60 / tempo) * x.division : x.time;
     dL.delayTime.value = clamp(t, 0.01, 5);
     dR.delayTime.value = clamp(t, 0.01, 5);
     fb.gain.value = clamp(x.feedback, 0, 0.95);
@@ -122,7 +122,7 @@ function buildDelay(ctx: BaseAudioContext, fx: Extract<AudioEffect, { type: 'del
     m.setMix(clamp(x.mix, 0, 1));
   };
   apply(fx);
-  return { input: m.input, output: m.out, update: (x) => x.type === 'delay' && apply(x), dispose: () => [m.input, dL, dR, fb, tone, panL, panR, merge, m.out].forEach((n) => n.disconnect()) };
+  return { input: m.input, output: m.out, update: (x, tempo) => x.type === 'delay' && apply(x, tempo), dispose: () => [m.input, dL, dR, fb, tone, panL, panR, merge, m.out].forEach((n) => n.disconnect()) };
 }
 
 function buildCompressor(ctx: BaseAudioContext, fx: Extract<AudioEffect, { type: 'compressor' }>): FxNode {
@@ -229,11 +229,14 @@ export function buildEffect(ctx: BaseAudioContext, fx: AudioEffect, bpm: number)
 }
 
 /** Frequency response (dB) of an EQ at the given frequencies — for the EQ curve display. */
+const responseFilters = new WeakMap<BaseAudioContext, BiquadFilterNode>();
 export function eqResponse(ctx: BaseAudioContext, bands: EqBand[], freqs: Float32Array<ArrayBuffer>): Float32Array<ArrayBuffer> {
   const total = new Float32Array(freqs.length);
   const mag = new Float32Array(freqs.length);
   const phase = new Float32Array(freqs.length);
-  const f = ctx.createBiquadFilter();
+  // one scratch filter per context (this runs every animation frame)
+  let f = responseFilters.get(ctx);
+  if (!f) { f = ctx.createBiquadFilter(); responseFilters.set(ctx, f); }
   for (const b of bands) {
     if (!b.enabled) continue;
     f.type = b.type; f.frequency.value = clamp(b.frequency, 20, 20000); f.gain.value = b.gain; f.Q.value = clamp(b.q, 0.05, 30);

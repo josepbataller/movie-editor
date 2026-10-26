@@ -27,6 +27,7 @@ interface ScheduledSample { source: AudioBufferSourceNode; gain: GainNode; clipI
 export class StudioEngine {
   readonly ctx: AudioContext;
   private buffers = new Map<string, AudioBuffer>();         // assetId -> decoded
+  private failed = new Set<string>();                        // assets that could not be decoded (don't retry per mutation)
   private reversed = new Map<string, AudioBuffer>();
   private loading = new Map<string, Promise<AudioBuffer | null>>();
   private chains = new Map<string, TrackChain>();
@@ -42,6 +43,8 @@ export class StudioEngine {
   private _playing = false;
   private startCtxTime = 0;
   private startPos = 0;
+  /** Gapless loop: the clock jumps back by loopLen when ctx time reaches atCtx. */
+  private pendingWrap: { atCtx: number; loopLen: number } | null = null;
   private scheduledUntil = 0;     // timeline seconds already scheduled (notes/metronome)
   private samples: ScheduledSample[] = [];
   private voices: Voice[] = [];
@@ -67,6 +70,11 @@ export class StudioEngine {
   /** Current timeline position in seconds. */
   position(): number {
     if (!this._playing) return this.startPos;
+    if (this.pendingWrap && this.ctx.currentTime >= this.pendingWrap.atCtx) {
+      this.startPos -= this.pendingWrap.loopLen;
+      this.pendingWrap = null;
+      this.onLoop?.();
+    }
     return this.startPos + (this.ctx.currentTime - this.startCtxTime);
   }
 
@@ -76,6 +84,7 @@ export class StudioEngine {
 
   async loadAsset(asset: MediaAsset): Promise<AudioBuffer | null> {
     if (this.buffers.has(asset.id)) return this.buffers.get(asset.id)!;
+    if (this.failed.has(asset.id)) return null;
     if (this.loading.has(asset.id)) return this.loading.get(asset.id)!;
     const p = (async () => {
       try {
@@ -88,13 +97,14 @@ export class StudioEngine {
         } catch {
           // container not decodable by Chromium (e.g. some mkv/wmv): let FFmpeg extract a WAV
           const wav = await window.api.extractWav(asset.path);
-          if (!wav) return null;
+          if (!wav) { this.failed.add(asset.id); return null; }
           data = await (await fetch(window.api.fileUrl(wav))).arrayBuffer();
           const buf = await this.ctx.decodeAudioData(data);
           this.buffers.set(asset.id, buf);
           return buf;
         }
       } catch {
+        this.failed.add(asset.id);
         return null;
       } finally {
         this.loading.delete(asset.id);
@@ -150,7 +160,7 @@ export class StudioEngine {
       } else if (fxIds.join('|') !== ch.fxIds.join('|')) {
         this.rebuildFx(ch, track, session.bpm);
       } else {
-        track.effects.forEach((e, i) => ch!.fx[i].update(e));
+        track.effects.forEach((e, i) => ch!.fx[i].update(e, session.bpm));
       }
       ch.track = track;
       const audible = !track.muted && (!anySolo || track.solo);
@@ -167,7 +177,7 @@ export class StudioEngine {
       for (const f of this.masterFx) { prev.connect(f.input); prev = f.output; }
       prev.connect(this.masterGain);
     } else {
-      session.masterEffects.forEach((e, i) => this.masterFx[i].update(e));
+      session.masterEffects.forEach((e, i) => this.masterFx[i].update(e, session.bpm));
     }
     this.masterGain.gain.setTargetAtTime(session.masterGain, ctx.currentTime, 0.01);
   }
@@ -206,12 +216,16 @@ export class StudioEngine {
   async play(from: number) {
     if (!this.session) return;
     if (this.ctx.state === 'suspended') await this.ctx.resume();
+    await this.preload(this.session, this.assets); // otherwise not-yet-decoded clips would be skipped
     this.stopSources();
     this._playing = true;
+    this.pendingWrap = null;
     this.startPos = from;
     this.startCtxTime = this.ctx.currentTime + 0.05;
     this.scheduledUntil = from;
-    this.scheduleSamples(from);
+    const loop = this.session.loop;
+    const loopActive = loop.enabled && loop.end > loop.start + 0.05 && from < loop.end;
+    this.scheduleSamples(from, this.ctx, this.chains, undefined, loopActive ? loop.end : Infinity);
     this.tick();
     if (this.timer == null) this.timer = window.setInterval(() => this.tick(), TICK_MS);
   }
@@ -219,8 +233,11 @@ export class StudioEngine {
   stop(keepPosition = true) {
     const pos = this.position();
     this._playing = false;
+    this.pendingWrap = null;
     if (this.timer != null) { window.clearInterval(this.timer); this.timer = null; }
     this.stopSources();
+    for (const v of this.liveVoices.values()) v.release(this.ctx.currentTime);
+    this.liveVoices.clear();
     this.startPos = keepPosition ? pos : this.startPos;
   }
 
@@ -241,31 +258,60 @@ export class StudioEngine {
     this.voices = [];
   }
 
-  /** Called every TICK_MS: schedules notes / metronome ahead of time, handles the loop end. */
+  /** Called every TICK_MS: schedules notes / metronome ahead of time; wraps the loop gaplessly. */
   private tick() {
     if (!this._playing || !this.session) return;
     const s = this.session;
     const pos = this.position();
-    if (s.loop.enabled && s.loop.end > s.loop.start + 0.05 && pos >= s.loop.end) {
-      void this.play(s.loop.start);
-      this.onLoop?.();
+    // prune finished voices so long sessions don't accumulate them
+    if (this.voices.length > 64) this.voices = this.voices.filter((v) => !v.ended);
+    const toCtx = (t: number) => this.startCtxTime + (t - this.startPos);
+    const loop = s.loop;
+    const loopActive = loop.enabled && loop.end > loop.start + 0.05 && this.scheduledUntil <= loop.end;
+    let until = pos + LOOKAHEAD;
+
+    if (loopActive && until >= loop.end && !this.pendingWrap) {
+      // Schedule up to the loop end, then pre-schedule the start of the next pass so there is no gap.
+      this.scheduleNotes(this.ctx, this.scheduledUntil, loop.end, toCtx);
+      if (s.metronome) this.scheduleMetronome(this.scheduledUntil, loop.end);
+      const loopLen = loop.end - loop.start;
+      const wrapCtx = toCtx(loop.end);
+      const after = (t: number) => wrapCtx + (t - loop.start);     // timeline t (>= loop.start) in the next pass
+      const nextUntil = loop.start + (until - loop.end);
+      this.scheduleSamples(loop.start, this.ctx, this.chains, after, loop.end);
+      this.scheduleNotes(this.ctx, loop.start, nextUntil, after);
+      if (s.metronome) this.scheduleMetronome(loop.start, nextUntil, after);
+      this.pendingWrap = { atCtx: wrapCtx, loopLen };
+      this.scheduledUntil = nextUntil;
       return;
     }
-    const until = Math.min(pos + LOOKAHEAD, s.loop.enabled ? s.loop.end : Infinity);
+    if (this.pendingWrap) {
+      // between pre-scheduling and the actual wrap: keep scheduling the next pass
+      const after = (t: number) => this.pendingWrap!.atCtx + (t - loop.start);
+      const nextUntil = Math.min(loop.start + (until - loop.end), loop.end);
+      if (nextUntil > this.scheduledUntil) {
+        this.scheduleNotes(this.ctx, this.scheduledUntil, nextUntil, after);
+        if (s.metronome) this.scheduleMetronome(this.scheduledUntil, nextUntil, after);
+        this.scheduledUntil = nextUntil;
+      }
+      return;
+    }
+    if (loop.enabled && loop.end > loop.start + 0.05) until = Math.min(until, loop.end);
     if (until <= this.scheduledUntil) return;
-    this.scheduleNotes(this.ctx, this.scheduledUntil, until, (timelineT) => this.startCtxTime + (timelineT - this.startPos));
+    this.scheduleNotes(this.ctx, this.scheduledUntil, until, toCtx);
     if (s.metronome) this.scheduleMetronome(this.scheduledUntil, until);
     this.scheduledUntil = until;
   }
 
   private metroOut: GainNode | null = null;
-  private scheduleMetronome(fromT: number, toT: number) {
+  private scheduleMetronome(fromT: number, toT: number, toCtx?: (t: number) => number) {
     const s = this.session!;
     const beat = 60 / s.bpm;
+    const map = toCtx ?? ((t: number) => this.startCtxTime + (t - this.startPos));
     if (!this.metroOut) { this.metroOut = this.ctx.createGain(); this.metroOut.gain.value = 0.5; this.metroOut.connect(this.masterGain); }
     let b = Math.ceil(fromT / beat - 1e-6);
     for (; b * beat < toT; b++) {
-      const t = this.startCtxTime + (b * beat - this.startPos);
+      const t = map(b * beat);
       const o = this.ctx.createOscillator();
       const g = this.ctx.createGain();
       o.frequency.value = b % s.beatsPerBar === 0 ? 1600 : 1000;
@@ -304,7 +350,9 @@ export class StudioEngine {
       const playDur = Math.min(end, limit) - startT;
       this.scheduleClipGain(gain.gain, clip, local, when, playDur);
       try {
-        source.start(when, Math.max(0, Math.min(offset, buffer.duration - 0.001)), playDur);
+        // start()'s duration argument is in buffer seconds (ignores playbackRate): stop() instead
+        source.start(when, Math.max(0, Math.min(offset, buffer.duration - 0.001)));
+        source.stop(when + playDur + 0.002);
       } catch { continue; }
       if (ctx === this.ctx) this.samples.push({ source, gain, clipId: clip.id });
     }
@@ -339,7 +387,8 @@ export class StudioEngine {
       const inst = chain?.track.instrument;
       if (!chain || !inst) continue;
       const clipEnd = clip.start + clip.duration;
-      for (const n of clip.notes) {
+      const ordered = [...clip.notes].sort((a, b) => a.start - b.start || a.pitch - b.pitch); // glide follows time order
+      for (const n of ordered) {
         const t = clip.start + beatsToSeconds(n.start, s.bpm);
         if (t < fromT || t >= toT || t >= clipEnd) continue;
         const dur = Math.min(beatsToSeconds(n.length, s.bpm), clipEnd - t);
@@ -375,6 +424,20 @@ export class StudioEngine {
     const key = `${trackId}:${pitch}`;
     const v = this.liveVoices.get(key);
     if (v) { v.release(this.ctx.currentTime); this.liveVoices.delete(key); }
+  }
+
+  /** Audition an instrument without touching the session: plays straight into the master bus. */
+  async previewInstrument(inst: InstrumentSettings, pitches: number[], gapMs = 160) {
+    if (this.ctx.state === 'suspended') await this.ctx.resume();
+    const out = this.ctx.createGain(); out.gain.value = 0.8; out.connect(this.masterIn);
+    const t0 = this.ctx.currentTime + 0.02;
+    const voices: Voice[] = [];
+    pitches.forEach((p, i) => {
+      const when = t0 + (i * gapMs) / 1000;
+      const v = inst.kind === 'drums' ? playDrum(this.ctx, out, inst, p, 0.9, when) : playSynth(this.ctx, out, inst, p, 0.9, when, 0.45, null);
+      if (v) voices.push(v);
+    });
+    setTimeout(() => { voices.forEach((v) => v.kill()); out.disconnect(); }, pitches.length * gapMs + 3000);
   }
 
   /** Audition a sample clip region (e.g. after trimming). */

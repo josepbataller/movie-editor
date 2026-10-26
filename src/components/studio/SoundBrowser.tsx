@@ -17,16 +17,8 @@ export default function SoundBrowser() {
   const [tab, setTab] = useState<'instruments' | 'media'>('instruments');
   const st = useStudio.getState;
 
-  const audition = async (inst: InstrumentSettings) => {
-    // quick preview on a temporary track-less voice: use a throwaway track
-    const engine = getEngine();
-    const tid = st().addTrack('instrument', inst);
-    // let the engine pick up the new track, then play a short phrase
-    setTimeout(async () => {
-      if (inst.kind === 'drums') { for (const [i, n] of [36, 42, 38, 42].entries()) setTimeout(() => engine.noteOn(tid, n), i * 160); }
-      else { await engine.noteOn(tid, 60); setTimeout(() => engine.noteOff(tid, 60), 500); }
-      setTimeout(() => { st().removeTrack(tid); useStudio.setState((s) => ({ past: s.past.slice(0, -2) })); }, 1200);
-    }, 30);
+  const audition = (inst: InstrumentSettings) => {
+    void getEngine().previewInstrument(inst, inst.kind === 'drums' ? [36, 42, 38, 42] : [60, 64, 67], inst.kind === 'drums' ? 160 : 220);
   };
 
   const useInstrument = (inst: InstrumentSettings) => {

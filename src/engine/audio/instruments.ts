@@ -9,6 +9,15 @@ export interface Voice {
   release: (when: number) => void;
   /** Immediately silence and dispose. */
   kill: () => void;
+  /** Set once the voice has finished and freed its nodes (lets the engine prune its list). */
+  ended?: boolean;
+}
+
+/** Freeze an AudioParam at its current automated value (so a release can start mid-attack). */
+function holdAt(param: AudioParam, t: number) {
+  const p = param as AudioParam & { cancelAndHoldAtTime?: (t: number) => void };
+  if (typeof p.cancelAndHoldAtTime === 'function') p.cancelAndHoldAtTime(t);
+  else param.cancelScheduledValues(t);
 }
 
 const noiseBuffers = new WeakMap<BaseAudioContext, AudioBuffer>();
@@ -39,8 +48,8 @@ function adsr(param: AudioParam, when: number, peak: number, a: number, d: numbe
   param.setTargetAtTime(Math.max(floor, peak * s), when + A, D / 3);
   return (relWhen: number) => {
     const t = Math.max(relWhen, when + 0.002);
-    param.cancelScheduledValues(t);
-    // continue from wherever the envelope is, then decay to silence
+    // freeze the envelope where it is (even mid-attack), then decay to silence
+    holdAt(param, t);
     param.setTargetAtTime(floor, t, R / 3);
     return t + R * 1.5;
   };
@@ -126,19 +135,21 @@ export function playSynth(
   for (const s of sources) s.start(when);
 
   let ended = false;
+  const voice: Voice = { release: () => {}, kill: () => {} };
   const stopAt = (t: number) => {
     if (ended) return; ended = true;
     for (const s of sources) { try { s.stop(t); } catch { /* already stopped */ } }
-    const cleanup = () => { for (const n of nodes) n.disconnect(); for (const s of sources) s.disconnect(); };
+    const cleanup = () => { for (const n of nodes) n.disconnect(); for (const s of sources) s.disconnect(); voice.ended = true; };
     if (sources[0]) sources[0].onended = cleanup; else cleanup();
   };
-  const release = (relWhen: number) => {
+  voice.release = (relWhen: number) => {
     const end = releaseAmp(relWhen);
-    if (patch.filter.envAmount !== 0) filter.frequency.setTargetAtTime(baseCut, relWhen, Math.max(0.005, fe.release) / 3);
+    if (patch.filter.envAmount !== 0) { holdAt(filter.frequency, relWhen); filter.frequency.setTargetAtTime(baseCut, relWhen, Math.max(0.005, fe.release) / 3); }
     stopAt(end + 0.05);
   };
-  if (duration != null) release(when + Math.max(0.01, duration));
-  return { release, kill: () => { amp.gain.cancelScheduledValues(ctx.currentTime); amp.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.01); stopAt(ctx.currentTime + 0.08); } };
+  voice.kill = () => { holdAt(amp.gain, ctx.currentTime); amp.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.01); stopAt(ctx.currentTime + 0.08); };
+  if (duration != null) voice.release(when + Math.max(0.01, duration));
+  return voice;
 }
 
 function makeOscInto(
@@ -243,9 +254,10 @@ export function playDrum(ctx: BaseAudioContext, dest: AudioNode, kit: DrumKitPat
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 4500;
     out.disconnect(); out.connect(lp); lp.connect(dest);
   }
-  const kill = () => { for (const s of stops) s(); out.disconnect(); };
-  setTimeout(() => out.disconnect(), Math.max(0, (endTime - ctx.currentTime) * 1000 + 100));
-  return { release: () => {}, kill };
+  const voice: Voice = { release: () => {}, kill: () => { for (const s of stops) s(); out.disconnect(); voice.ended = true; } };
+  // free the output node once the hit has decayed (ctx.currentTime is 0-based for offline contexts too)
+  setTimeout(() => { out.disconnect(); voice.ended = true; }, Math.max(0, (endTime - ctx.currentTime) * 1000 + 100));
+  return voice;
 }
 
 export const DRUM_PITCHES = new Set([36, 38, 39, 42, 46, 41, 47, 50, 49, 51, 37, 56, 54, 75, 70, 76]);

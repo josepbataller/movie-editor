@@ -70,6 +70,8 @@ const api = {
   startupWorkspace: (process.argv.find((a) => a.startsWith('--workspace='))?.slice(12) ?? null) as 'video' | 'audio' | null,
   startupAudioExport: process.argv.find((a) => a.startsWith('--export-audio='))?.slice(15) ?? null,
   /** Debug: `--studio-fx=<trackId|master>` opens an effects chain; `--studio-editor=<clipId>` opens a pattern editor. */
+  /** Debug: `--studio-play=<seconds>` plays the studio session for N seconds (surfaces scheduling errors) and quits. */
+  startupStudioPlay: Number(process.argv.find((a) => a.startsWith('--studio-play='))?.slice(14) ?? 0) || 0,
   startupStudioFx: process.argv.find((a) => a.startsWith('--studio-fx='))?.slice(12) ?? null,
   startupStudioEditor: process.argv.find((a) => a.startsWith('--studio-editor='))?.slice(16) ?? null,
   /** Debug: `--seek=<seconds>` positions the playhead after the startup project loads. */
