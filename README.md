@@ -85,11 +85,14 @@ electron/
   preload.ts        Secure bridge exposed to the UI as window.api
   exportBuilder.ts  Project -> FFmpeg filter graph (the export engine)
 src/
-  shared/types.ts   Project data model (shared by UI and export)
-  store/            Zustand store: clips, tracks, undo/redo, playback state
-  engine/           Compositor, animation engine, text renderer, frame exporter, media import, project files
-  components/TitleStudio.tsx  Pop-up title designer
-  components/       TopBar, MediaBin, Preview, Timeline, Inspector, ExportDialog
+  shared/           Data models: types.ts (video project), audioTypes.ts (Audio Studio), api.d.ts
+  store/            Zustand stores: useProject.ts (video editor), useStudio.ts (Audio Studio)
+  engine/video/     Compositor, animation engine, text renderer, frame-by-frame exporter
+  engine/audio/     Web Audio engine, effects, synth/drum instruments, presets, studio<->video bridge
+  engine/project/   Project files (save/load/autosave), media import
+  components/video/ TopBar, MediaBin, Preview, Timeline, Inspector, ExportDialog, TitleStudio
+  components/studio/ Audio Studio UI (transport, tracks, sound browser, effects, pattern editor)
+  styles/           base.css, video.css, studio.css
 scripts/make-test-media.js  Generates sample clips in test-media/ (`npm run test:media`, run this first)
 scripts/test-export.ts   Headless export smoke test (`npm run test:export`)
 ```

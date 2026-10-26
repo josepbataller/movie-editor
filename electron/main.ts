@@ -38,7 +38,7 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       // Forward startup flags / a double-clicked .mvproj path to the preload script.
-      additionalArguments: process.argv.filter((a) => a.startsWith('--open=') || a.startsWith('--seek=') || a.startsWith('--export=') || a.startsWith('--select=') || a === '--studio' || /\.mvproj$/i.test(a)),
+      additionalArguments: process.argv.filter((a) => a.startsWith('--open=') || a.startsWith('--seek=') || a.startsWith('--export=') || a.startsWith('--select=') || a === '--studio' || a.startsWith('--workspace=') || a.startsWith('--export-audio=') || a.startsWith('--studio-fx=') || a.startsWith('--studio-editor=') || /\.mvproj$/i.test(a)),
       contextIsolation: true,
       nodeIntegration: false,
       // Allow <video>/<img> to load local files via file:// (local-only app).
@@ -291,6 +291,40 @@ ipcMain.handle('media:waveform', async (_e, filePath: string) => {
     '-frames:v', '1', out,
   ]);
   return code === 0 && fs.existsSync(out) ? out : null;
+});
+
+ipcMain.handle('media:extractWav', async (_e, filePath: string) => {
+  const out = path.join(TEMP_DIR, `wav-${hashPath(filePath)}.wav`);
+  if (fs.existsSync(out)) return out;
+  const { code } = await run(FFMPEG, ['-y', '-v', 'error', '-i', filePath, '-vn', '-ac', '2', '-ar', '48000', '-c:a', 'pcm_s16le', out]);
+  return code === 0 && fs.existsSync(out) ? out : null;
+});
+
+ipcMain.handle('fs:writeBinary', async (_e, filePath: string, data: ArrayBuffer) => {
+  await fs.promises.writeFile(filePath, Buffer.from(data));
+});
+
+ipcMain.handle('app:tempPath', async (_e, name: string) => path.join(TEMP_DIR, name));
+
+ipcMain.handle('audio:encode', async (_e, wavPath: string, outPath: string, format: string, bitrate = '320k') => {
+  const args = ['-y', '-v', 'error', '-i', wavPath];
+  if (format === 'mp3') args.push('-c:a', 'libmp3lame', '-b:a', bitrate);
+  else if (format === 'flac') args.push('-c:a', 'flac');
+  else if (format === 'm4a' || format === 'aac') args.push('-c:a', 'aac', '-b:a', bitrate);
+  else if (format === 'ogg') args.push('-c:a', 'libvorbis', '-q:a', '6');
+  else args.push('-c:a', 'pcm_s16le');
+  args.push(outPath);
+  const { code, stderr } = await run(FFMPEG, args);
+  return code === 0 ? { ok: true } : { ok: false, error: stderr.trim().split('\n').slice(-3).join('\n') };
+});
+
+ipcMain.handle('dialog:exportAudio', async (_e, defaultName: string, format: string) => {
+  const res = await dialog.showSaveDialog(win!, {
+    title: 'Export audio',
+    defaultPath: path.join(app.getPath('music'), `${defaultName || 'mix'}.${format}`),
+    filters: [{ name: format.toUpperCase(), extensions: [format] }],
+  });
+  return res.canceled ? null : res.filePath;
 });
 
 ipcMain.handle('media:writeTempPng', async (_e, dataUrl: string, name: string) => {

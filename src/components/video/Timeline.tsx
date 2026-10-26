@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, memo } from 'react';
 import { useProject, projectDuration } from '@/store/useProject';
 import type { Clip, Track } from '@/shared/types';
-import { formatTime } from '@/engine/importMedia';
+import { formatTime } from '@/engine/project/importMedia';
 
 const HEADER_W = 170;
 const RULER_H = 28;

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useProject, projectDuration } from '@/store/useProject';
-import { drawFrame, hitTest, textSource, clipBounds, SourceLookup, previewSource } from '@/engine/compositor';
+import { drawFrame, hitTest, textSource, clipBounds, SourceLookup, previewSource } from '@/engine/video/compositor';
 import { Clip, VisualClip, fadeFactor } from '@/shared/types';
-import { formatTime } from '@/engine/importMedia';
-import { animatedVolume } from '@/engine/animation';
+import { formatTime } from '@/engine/project/importMedia';
+import { animatedVolume } from '@/engine/video/animation';
 
 type MediaEl = HTMLVideoElement | HTMLAudioElement | HTMLImageElement;
 

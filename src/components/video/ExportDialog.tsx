@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useProject, projectDuration } from '@/store/useProject';
 import type { ExportProgress, ExportSettings } from '@/shared/types';
-import { renderText } from '@/engine/textRender';
-import { formatTime } from '@/engine/importMedia';
-import { exportFrames } from '@/engine/frameExporter';
-import { needsFrameEngine } from '../../electron/exportBuilder';
+import { renderText } from '@/engine/video/textRender';
+import { formatTime } from '@/engine/project/importMedia';
+import { exportFrames } from '@/engine/video/frameExporter';
+import { needsFrameEngine } from '../../../electron/exportBuilder';
 
 type Phase = 'settings' | 'preparing' | 'running' | 'done' | 'error' | 'cancelled';
 

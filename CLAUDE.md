@@ -25,18 +25,30 @@ with `taskkill //F //IM electron.exe` (Git Bash) when captures start failing wit
 
 ## Layout
 
-- `src/shared/types.ts` — project data model shared by UI and export. Change it first; keep it
-  dependency-free (the Electron main process imports it).
-- `src/store/useProject.ts` — Zustand store. Every mutation goes through `mutate()`; pass
+Two workspaces share one project file: the **video editor** and the **Audio Studio** (DAW).
+Folders are split the same way everywhere (`video/`, `audio/`/`studio/`, shared/`project/`).
+
+- `src/shared/` — data models, dependency-free (the Electron main process imports them):
+  `types.ts` (video project, clips, export settings), `audioTypes.ts` (studio session, tracks,
+  effects, instruments), `api.d.ts` (typing of `window.api`). Change models first.
+- `src/store/` — Zustand stores: `useProject.ts` (video project + UI, `workspace` switch),
+  `useStudio.ts` (audio session + UI). Every mutation goes through `mutate()`; pass
   `{ commit: false }` while dragging/sliding and call `commit()` once at the start of the gesture
   so undo has one entry per gesture. Selectors must return stable references (no fresh arrays).
-- `src/engine/` — `compositor.ts` (draws a frame; used by preview AND the frame exporter),
+- `src/engine/video/` — `compositor.ts` (draws a frame; used by preview AND the frame exporter),
   `animation.ts` (segment envelopes + presets), `textRender.ts` (titles, per-frame text
-  animations), `frameExporter.ts` (precise export), `projectFile.ts` (save/load/autosave).
+  animations), `frameExporter.ts` (precise export).
+- `src/engine/audio/` — `engine.ts` (Web Audio graph, transport, scheduling, offline render,
+  WAV encoder), `effects.ts` (effect sub-graphs, EQ response), `instruments.ts` (synth + drum
+  synthesis), `presets.ts` (factory sounds), `bridge.ts` (studio ↔ video hand-over).
+- `src/engine/project/` — `projectFile.ts` (save/load/migrate/autosave/close handshake),
+  `importMedia.ts` (probe, thumbnails, waveforms).
+- `src/components/video/` — editor UI; `src/components/studio/` — DAW UI (`useEngineSync.ts`
+  binds the store to the audio engine). `src/styles/{base,video,studio}.css`.
 - `electron/exportBuilder.ts` — Project → FFmpeg command for the fast "graph" engine and the
   audio graph of the "frames" engine. `needsFrameEngine()` decides which engine a project needs.
-- `electron/main.ts` — windows, dialogs, ffprobe, thumbnails, export processes, frame decoders.
-  `electron/preload.ts` is the only bridge (`window.api`).
+- `electron/main.ts` — windows, dialogs, ffprobe, thumbnails, export processes, frame decoders,
+  audio extraction/encoding. `electron/preload.ts` is the only bridge (`window.api`).
 
 ## Conventions
 

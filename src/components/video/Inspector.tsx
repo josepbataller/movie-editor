@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useProject } from '@/store/useProject';
 import { Clip, VisualClip, DEFAULT_EFFECTS, DEFAULT_TRANSFORM, fittedSize, ANIMATABLE, AnimatableProperty, AnimationSegment } from '@/shared/types';
-import { FONT_CHOICES } from '@/engine/textRender';
-import { ANIMATION_PRESETS, newSegment } from '@/engine/animation';
+import { FONT_CHOICES } from '@/engine/video/textRender';
+import { ANIMATION_PRESETS, newSegment } from '@/engine/video/animation';
+import { openClipInStudio } from '@/engine/audio/bridge';
 
 // ---------- small form controls ----------
 
@@ -300,6 +301,7 @@ function AudioSection({ clip }: { clip: Clip & { type: 'video' | 'audio' } }) {
     <Section title="Audio">
       <div className="row">
         <button className={a.muted ? 'on' : ''} onClick={() => st().updateAudio(clip.id, { muted: !a.muted })}>{a.muted ? '🔇 Muted' : '🔊 Sound on'}</button>
+        <button onClick={() => openClipInStudio(clip)} title="Edit this sound in the Audio Studio (EQ, effects, precise fades); send the result back with 'Send to video'">🎛 Open in Audio Studio</button>
       </div>
       <Slider label="Volume" value={a.volume} min={0} max={3} step={0.01} unit="×" onChange={(v) => st().updateAudio(clip.id, { volume: v }, { commit: false })} onReset={() => st().updateAudio(clip.id, { volume: 1 })} />
       <Slider label="Fade in" value={a.fadeIn} min={0} max={max} step={0.1} unit="s" onChange={(v) => st().updateAudio(clip.id, { fadeIn: v }, { commit: false })} onReset={() => st().updateAudio(clip.id, { fadeIn: 0 })} />

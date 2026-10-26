@@ -196,6 +196,8 @@ export interface Project {
   assets: MediaAsset[];
   tracks: Track[];      // ordered: index 0 is the bottom-most video layer
   clips: Clip[];
+  /** Audio Studio session (DAW module); see audioTypes.ts. Optional for older files. */
+  audio?: import('./audioTypes').AudioSession;
 }
 
 export interface ExportSettings {

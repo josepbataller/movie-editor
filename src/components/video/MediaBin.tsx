@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useProject } from '@/store/useProject';
-import { importViaDialog, importFiles, formatTime } from '@/engine/importMedia';
+import { importViaDialog, importFiles, formatTime } from '@/engine/project/importMedia';
 import type { MediaAsset } from '@/shared/types';
 
 export default function MediaBin() {

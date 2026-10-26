@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useProject } from '@/store/useProject';
 import { TextProps, TextAnimation, TextExitAnimation, DEFAULT_TEXT, fadeFactor } from '@/shared/types';
-import { renderTextFrame, FONT_CHOICES } from '@/engine/textRender';
-import { clipBoundsWith, drawFrame, previewSource } from '@/engine/compositor';
+import { renderTextFrame, FONT_CHOICES } from '@/engine/video/textRender';
+import { clipBoundsWith, drawFrame, previewSource } from '@/engine/video/compositor';
 
 // Title Studio: a focused, Canva-like editor for one text clip with a live,
 // scrubbable animation preview. Everything it writes goes straight to the store,

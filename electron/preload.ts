@@ -6,6 +6,14 @@ const api = {
   generateThumbnail: (filePath: string, at: number) => ipcRenderer.invoke('media:thumbnail', filePath, at),
   generateWaveform: (filePath: string) => ipcRenderer.invoke('media:waveform', filePath),
   writeTempPng: (dataUrl: string, name: string): Promise<string> => ipcRenderer.invoke('media:writeTempPng', dataUrl, name),
+  /** Extract a file's audio to a temp WAV (fallback when Chromium can't decode the container). */
+  extractWav: (filePath: string): Promise<string | null> => ipcRenderer.invoke('media:extractWav', filePath),
+  /** Write binary data (e.g. a rendered WAV) to a file. */
+  writeBinary: (filePath: string, data: ArrayBuffer): Promise<void> => ipcRenderer.invoke('fs:writeBinary', filePath, data),
+  /** Encode a WAV to mp3/flac/aac/ogg with FFmpeg. */
+  encodeAudio: (wavPath: string, outPath: string, format: string, bitrate?: string): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('audio:encode', wavPath, outPath, format, bitrate),
+  audioExportDialog: (defaultName: string, format: string): Promise<string | null> => ipcRenderer.invoke('dialog:exportAudio', defaultName, format),
+  tempPath: (name: string): Promise<string> => ipcRenderer.invoke('app:tempPath', name),
 
   saveProjectDialog: (defaultName: string): Promise<string | null> => ipcRenderer.invoke('dialog:saveProject', defaultName),
   openProjectDialog: (): Promise<string | null> => ipcRenderer.invoke('dialog:openProject'),
@@ -58,6 +66,12 @@ const api = {
   /** Debug: `--select=<clipId>` selects a clip; `--studio` opens the Title Studio for it. */
   startupSelect: process.argv.find((a) => a.startsWith('--select='))?.slice(9) ?? null,
   startupStudio: process.argv.includes('--studio'),
+  /** Debug: `--workspace=audio` opens the Audio Studio; `--export-audio=<out.wav>` renders the studio mix headlessly and quits. */
+  startupWorkspace: (process.argv.find((a) => a.startsWith('--workspace='))?.slice(12) ?? null) as 'video' | 'audio' | null,
+  startupAudioExport: process.argv.find((a) => a.startsWith('--export-audio='))?.slice(15) ?? null,
+  /** Debug: `--studio-fx=<trackId|master>` opens an effects chain; `--studio-editor=<clipId>` opens a pattern editor. */
+  startupStudioFx: process.argv.find((a) => a.startsWith('--studio-fx='))?.slice(12) ?? null,
+  startupStudioEditor: process.argv.find((a) => a.startsWith('--studio-editor='))?.slice(16) ?? null,
   /** Debug: `--seek=<seconds>` positions the playhead after the startup project loads. */
   startupSeek: Number(process.argv.find((a) => a.startsWith('--seek='))?.slice(7) ?? 0) || 0,
   fileUrl: (filePath: string): string => {

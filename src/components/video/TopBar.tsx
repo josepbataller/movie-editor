@@ -1,17 +1,23 @@
 import { useProject } from '@/store/useProject';
-import { importViaDialog } from '@/engine/importMedia';
-import { newProjectAction, openProjectAction, saveProjectAction } from '@/engine/projectFile';
+import { importViaDialog } from '@/engine/project/importMedia';
+import { newProjectAction, openProjectAction, saveProjectAction } from '@/engine/project/projectFile';
 
 export default function TopBar() {
   const name = useProject((s) => s.project.name);
   const dirty = useProject((s) => s.dirty);
   const canUndo = useProject((s) => s.past.length > 0);
   const canRedo = useProject((s) => s.future.length > 0);
+  const workspace = useProject((s) => s.workspace);
   const st = useProject.getState;
 
   return (
     <div className="topbar">
       <div className="brand">🎞 Movie Editor</div>
+      <div className="ws-switch" title="Switch between the video editor and the Audio Studio">
+        <button className={workspace === 'video' ? 'on' : ''} onClick={() => st().setWorkspace('video')}>🎬 Video</button>
+        <button className={workspace === 'audio' ? 'on' : ''} onClick={() => st().setWorkspace('audio')}>🎛 Audio Studio</button>
+      </div>
+      <span className="sep" />
       <div className="group">
         <button onClick={newProjectAction} title="New project (Ctrl+N)">New</button>
         <button onClick={openProjectAction} title="Open project (Ctrl+O)">Open…</button>

@@ -37,6 +37,9 @@ interface EditorState {
   pixelsPerSecond: number;
   snapping: boolean;
   exportOpen: boolean;
+  /** Which workspace is shown: the video editor or the Audio Studio (DAW). */
+  workspace: 'video' | 'audio';
+  setWorkspace: (w: 'video' | 'audio') => void;
 
   past: Snapshot[];
   future: Snapshot[];
@@ -157,6 +160,7 @@ export const useProject = create<EditorState>((set, get) => {
     pixelsPerSecond: 60,
     snapping: true,
     exportOpen: false,
+    workspace: 'video',
     splitAudioOnImport: true,
     past: [],
     future: [],
@@ -443,6 +447,7 @@ export const useProject = create<EditorState>((set, get) => {
     setPixelsPerSecond: (pps) => set({ pixelsPerSecond: Math.min(600, Math.max(5, pps)) }),
     toggleSnapping: () => set((s) => ({ snapping: !s.snapping })),
     setExportOpen: (exportOpen) => set({ exportOpen }),
+    setWorkspace: (workspace) => set({ workspace, playing: false }),
     setSplitAudioOnImport: (splitAudioOnImport) => set({ splitAudioOnImport }),
     titleStudioClipId: null,
     setTitleStudio: (titleStudioClipId) => set({ titleStudioClipId }),

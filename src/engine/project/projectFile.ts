@@ -1,6 +1,7 @@
 import { useProject, newProject } from '@/store/useProject';
 import { type Project, DEFAULT_TEXT } from '@/shared/types';
 import { refreshAssets } from './importMedia';
+import { useStudio } from '@/store/useStudio';
 
 const FORMAT_VERSION = 2;
 const AUTOSAVE_INTERVAL_MS = 15000;
@@ -12,9 +13,10 @@ export async function saveProjectAction(saveAs: boolean): Promise<boolean> {
     path = await window.api.saveProjectDialog(st.project.name);
     if (!path) return false;
   }
-  const payload = { version: FORMAT_VERSION, project: st.project };
+  const payload = { version: FORMAT_VERSION, project: { ...st.project, audio: useStudio.getState().session } };
   await window.api.writeFile(path, JSON.stringify(payload, null, 2));
   useProject.setState({ projectPath: path, dirty: false });
+  useStudio.getState().markSaved();
   await clearAutosave();
   return true;
 }
@@ -22,7 +24,7 @@ export async function saveProjectAction(saveAs: boolean): Promise<boolean> {
 /** Native Save / Don't save / Cancel prompt. Resolves true when it is OK to proceed. */
 async function confirmDiscard(what: string): Promise<boolean> {
   const st = useProject.getState();
-  if (!st.dirty) return true;
+  if (!st.dirty && !useStudio.getState().dirty) return true;
   const choice = await window.api.confirmDiscard(what);
   if (choice === 'cancel') return false;
   if (choice === 'save') return saveProjectAction(false);
@@ -51,6 +53,7 @@ export async function loadProjectFromPath(path: string) {
     const project: Project = raw.project ?? raw;
     if (!project.tracks || !project.clips) throw new Error('Not a Movie Editor project file.');
     useProject.getState().setProject(migrate(project), path);
+    useStudio.getState().setSession(project.audio);
     void refreshAssets(); // thumbnails/waveforms regenerate in the background
     await warnMissingMedia(project);
   } catch (err: any) {
@@ -67,6 +70,7 @@ async function warnMissingMedia(project: Project) {
 export async function newProjectAction() {
   if (!(await confirmDiscard('starting a new project'))) return;
   useProject.getState().resetProject();
+  useStudio.getState().reset();
 }
 
 // ---------------------------------------------------------------------------
@@ -84,12 +88,13 @@ async function clearAutosave() {
 let autosaveGeneration = 0; // bumped by clearAutosave so an in-flight autosave can't resurrect a stale copy
 async function writeAutosave() {
   const st = useProject.getState();
-  if (!st.dirty) return;
+  const studio = useStudio.getState();
+  if (!st.dirty && !studio.dirty) return;
   const gen = autosaveGeneration;
   try {
     const p = await window.api.autosavePath();
-    if (gen !== autosaveGeneration || !useProject.getState().dirty) return;
-    const payload = { version: FORMAT_VERSION, project: st.project, projectPath: st.projectPath, savedAt: Date.now() };
+    if (gen !== autosaveGeneration || (!useProject.getState().dirty && !useStudio.getState().dirty)) return;
+    const payload = { version: FORMAT_VERSION, project: { ...st.project, audio: studio.session }, projectPath: st.projectPath, savedAt: Date.now() };
     await window.api.writeFile(p, JSON.stringify(payload));
     if (gen !== autosaveGeneration) await clearAutosave();
   } catch { /* ignore */ }
@@ -112,6 +117,7 @@ export async function offerRecovery(): Promise<boolean> {
     );
     if (choice === 0) {
       useProject.getState().setProject(migrate(raw.project), raw.projectPath ?? null);
+      useStudio.getState().setSession(raw.project.audio);
       useProject.setState({ dirty: true });
       void refreshAssets();
       void warnMissingMedia(raw.project);
@@ -125,10 +131,11 @@ export async function offerRecovery(): Promise<boolean> {
 /** Call once from the app root. Returns a cleanup function. */
 export function installProjectLifecycle(): () => void {
   // keep the main process informed so it can prompt on window close
-  const unsub = useProject.subscribe((s, prev) => {
-    if (s.dirty !== prev.dirty) window.api.setDirty(s.dirty);
-  });
-  window.api.setDirty(useProject.getState().dirty);
+  const sync = () => window.api.setDirty(useProject.getState().dirty || useStudio.getState().dirty);
+  const unsub1 = useProject.subscribe((s, prev) => { if (s.dirty !== prev.dirty) sync(); });
+  const unsub2 = useStudio.subscribe((s, prev) => { if (s.dirty !== prev.dirty) sync(); });
+  const unsub = () => { unsub1(); unsub2(); };
+  sync();
 
   const timer = window.setInterval(writeAutosave, AUTOSAVE_INTERVAL_MS);
 

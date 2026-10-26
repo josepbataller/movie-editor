@@ -1,18 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
-import TopBar from './components/TopBar';
-import MediaBin from './components/MediaBin';
-import Preview from './components/Preview';
-import Inspector from './components/Inspector';
-import Timeline from './components/Timeline';
-import ExportDialog from './components/ExportDialog';
+import TopBar from './components/video/TopBar';
+import MediaBin from './components/video/MediaBin';
+import Preview from './components/video/Preview';
+import Inspector from './components/video/Inspector';
+import Timeline from './components/video/Timeline';
+import ExportDialog from './components/video/ExportDialog';
 import { useProject, projectDuration } from './store/useProject';
-import { importViaDialog } from './engine/importMedia';
-import { newProjectAction, openProjectAction, saveProjectAction, loadProjectFromPath, installProjectLifecycle, offerRecovery } from './engine/projectFile';
-import TitleStudio from './components/TitleStudio';
+import { importViaDialog } from './engine/project/importMedia';
+import { newProjectAction, openProjectAction, saveProjectAction, loadProjectFromPath, installProjectLifecycle, offerRecovery } from './engine/project/projectFile';
+import TitleStudio from './components/video/TitleStudio';
+import StudioApp from './components/studio/StudioApp';
+import { renderMixToWav } from './engine/audio/bridge';
+import { useStudio } from './store/useStudio';
 
 export default function App() {
   const exportOpen = useProject((s) => s.exportOpen);
   const titleStudioClipId = useProject((s) => s.titleStudioClipId);
+  const workspace = useProject((s) => s.workspace);
   const [timelineH, setTimelineH] = useState(300);
   const dragRef = useRef<{ y: number; h: number } | null>(null);
 
@@ -34,6 +38,7 @@ export default function App() {
         return;
       }
       if (st.exportOpen || st.titleStudioClipId) return;
+      if (st.workspace === 'audio') return; // the Audio Studio has its own shortcuts
 
       if (ctrl && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? st.redo() : st.undo(); return; }
       if (ctrl && e.key.toLowerCase() === 'y') { e.preventDefault(); st.redo(); return; }
@@ -77,6 +82,14 @@ export default function App() {
         if (window.api.startupExport) useProject.getState().setExportOpen(true);
         if (window.api.startupSelect) useProject.getState().select([window.api.startupSelect]);
         if (window.api.startupStudio && window.api.startupSelect) useProject.getState().setTitleStudio(window.api.startupSelect);
+        if (window.api.startupWorkspace === 'audio') useProject.getState().setWorkspace('audio');
+        if (window.api.startupStudioFx) useStudio.getState().openFx(window.api.startupStudioFx);
+        if (window.api.startupStudioEditor) useStudio.getState().openEditor(window.api.startupStudioEditor);
+        if (window.api.startupAudioExport) {
+          try { await renderMixToWav(window.api.startupAudioExport); console.warn('[export-audio] done ' + window.api.startupAudioExport); }
+          catch (e: any) { console.error('[export-audio] ' + (e?.message ?? e)); }
+          window.api.closeNow();
+        }
       } else {
         await offerRecovery();
       }
@@ -95,6 +108,16 @@ export default function App() {
     window.addEventListener('mousemove', move);
     window.addEventListener('mouseup', up);
   };
+
+  if (workspace === 'audio') {
+    return (
+      <div className="app">
+        <TopBar />
+        <StudioApp />
+        {exportOpen && <ExportDialog />}
+      </div>
+    );
+  }
 
   return (
     <div className="app">

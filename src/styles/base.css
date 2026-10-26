@@ -1,0 +1,90 @@
+/* Shared look & feel: variables, controls, app layout, modals, scrollbars. */
+:root {
+  --bg: #17181c;
+  --panel: #1f2126;
+  --panel-2: #262932;
+  --border: #30343d;
+  --text: #e6e8ee;
+  --dim: #9aa1b1;
+  --accent: #4f8cff;
+  --accent-2: #6ea0ff;
+  --video: #3a6ea8;
+  --audio: #3b8f6a;
+  --image: #8a5fb8;
+  --text-clip: #c48a2b;
+  --danger: #d9534f;
+  --radius: 6px;
+  font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  font-size: 13px;
+  color: var(--text);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; background: var(--bg); overflow: hidden; }
+button, input, select, textarea { font: inherit; color: inherit; }
+
+button {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 5px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+button:hover:not(:disabled) { background: #30343e; border-color: #444a56; }
+button:disabled { opacity: 0.4; cursor: default; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+button.primary:hover:not(:disabled) { background: var(--accent-2); }
+button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.small { padding: 3px 8px; font-size: 12px; }
+
+input[type="text"], input:not([type]), input[type="number"], input[type="search"], select, textarea {
+  background: #14151a;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 6px;
+}
+input[type="range"] { accent-color: var(--accent); }
+input[type="color"] { width: 36px; height: 24px; padding: 0; border: 1px solid var(--border); background: transparent; border-radius: 4px; }
+.dim { color: var(--dim); }
+.small { font-size: 11.5px; }
+.sep { width: 1px; height: 22px; background: var(--border); margin: 0 6px; display: inline-block; }
+.row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 6px 0; }
+.row.space { justify-content: space-between; }
+.check { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+
+/* ---------- layout ---------- */
+.app { display: flex; flex-direction: column; height: 100%; }
+.topbar {
+  display: flex; align-items: center; gap: 6px; padding: 6px 10px;
+  background: var(--panel); border-bottom: 1px solid var(--border);
+}
+.topbar .brand { font-weight: 700; margin-right: 10px; font-size: 14px; }
+.topbar .group { display: flex; gap: 4px; }
+.topbar .project-name { margin-left: auto; margin-right: 10px; color: var(--dim); }
+.workspace { display: flex; flex: 1; min-height: 0; }
+.workspace .left { width: 270px; border-right: 1px solid var(--border); background: var(--panel); display: flex; flex-direction: column; }
+.workspace .center { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.workspace .right { width: 320px; border-left: 1px solid var(--border); background: var(--panel); overflow-y: auto; }
+.splitter { height: 5px; background: var(--border); cursor: row-resize; }
+.splitter:hover { background: var(--accent); }
+.bottom { background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
+
+.panel-title { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; font-weight: 600; border-bottom: 1px solid var(--border); }
+.panel-footer { padding: 6px 10px; border-top: 1px solid var(--border); }
+
+/* ---------- modal ---------- */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 50; }
+.modal { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; width: 480px; max-width: 95vw; box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
+.modal-title { font-size: 16px; font-weight: 700; margin-bottom: 12px; }
+.modal .field > label { width: 90px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.progress { height: 10px; background: #0f1013; border-radius: 5px; overflow: hidden; margin: 10px 0; }
+.progress .bar { height: 100%; background: linear-gradient(90deg, var(--accent), #7fd4ff); transition: width 0.3s; }
+.path { word-break: break-all; margin-top: 6px; }
+.error { background: #2a1818; border: 1px solid #5a2a2a; padding: 8px; border-radius: var(--radius); white-space: pre-wrap; font-size: 11.5px; max-height: 200px; overflow: auto; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #3a3f4a; border-radius: 5px; border: 2px solid var(--bg); }
+::-webkit-scrollbar-track { background: transparent; }
