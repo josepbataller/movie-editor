@@ -13,6 +13,7 @@ import { formatTime } from '@/engine/project/importMedia';
 const HEADER_W = 230;
 const RULER_H = 30;
 const SNAP_PX = 8;
+const MAX_CANVAS_W = 4096;
 
 export default function StudioTimeline() {
   const session = useStudio((s) => s.session);
@@ -334,7 +335,8 @@ function WaveCanvas({ clip, width, height, color }: { clip: SampleClip; width: n
   }, [clip.assetId, asset]);
   useEffect(() => {
     const c = ref.current; if (!c) return;
-    const w = Math.max(1, Math.floor(width)), h = Math.max(1, Math.floor(height));
+    // cap the backing store: huge canvases (long clips at high zoom) exhaust GPU memory; CSS stretches it
+    const w = Math.max(1, Math.min(MAX_CANVAS_W, Math.floor(width))), h = Math.max(1, Math.floor(height));
     c.width = w; c.height = h;
     const ctx = c.getContext('2d')!;
     ctx.clearRect(0, 0, w, h);
@@ -351,14 +353,15 @@ function WaveCanvas({ clip, width, height, color }: { clip: SampleClip; width: n
       ctx.fillRect(x, mid - Math.max(0.5, mx * mid), 1, Math.max(1, (mx - mn) * mid));
     }
   }, [clip.assetId, clip.inPoint, clip.duration, clip.rate, clip.reverse, clip.gain, width, height, color, asset]);
-  return <canvas ref={ref} className="wave" />;
+  return <canvas ref={ref} className="wave" style={{ width, height }} />;
 }
 
 function NotesPreview({ clip, width, height, color, drums }: { clip: PatternClip; width: number; height: number; color: string; drums?: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const c = ref.current; if (!c) return;
-    const w = Math.max(1, Math.floor(width)), h = Math.max(1, Math.floor(height));
+    // cap the backing store: huge canvases (long clips at high zoom) exhaust GPU memory; CSS stretches it
+    const w = Math.max(1, Math.min(MAX_CANVAS_W, Math.floor(width))), h = Math.max(1, Math.floor(height));
     c.width = w; c.height = h;
     const ctx = c.getContext('2d')!;
     ctx.clearRect(0, 0, w, h);
@@ -377,7 +380,7 @@ function NotesPreview({ clip, width, height, color, drums }: { clip: PatternClip
       ctx.fillRect(x, h - (row + 1) * rowH, nw, Math.max(2, rowH - 1));
     }
   }, [clip.notes, clip.lengthBeats, width, height, color, drums]);
-  return <canvas ref={ref} className="wave" />;
+  return <canvas ref={ref} className="wave" style={{ width, height }} />;
 }
 
 function StudioPlayhead({ headerW, toX, scrollRef }: { headerW: number; toX: (t: number) => number; scrollRef: React.RefObject<HTMLDivElement | null> }) {

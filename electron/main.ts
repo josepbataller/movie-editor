@@ -22,6 +22,30 @@ const TEMP_DIR = path.join(os.tmpdir(), 'movie-editor');
 fs.mkdirSync(TEMP_DIR, { recursive: true });
 
 let win: BrowserWindow | null = null;
+
+// ---------------------------------------------------------------------------
+// Crash / error log: %APPDATA%/Movie Editor/logs/main.log (rotated at 2 MB)
+// ---------------------------------------------------------------------------
+// Chromium quits the whole app ("GPU process isn't usable. Goodbye.") after a few GPU-process
+// crashes (flaky drivers, heavy canvas use). Keep running instead: it falls back to software.
+app.commandLine.appendSwitch('disable-gpu-process-crash-limit');
+
+const LOG_DIR = path.join(app.getPath('userData'), 'logs');
+const LOG_FILE = path.join(LOG_DIR, 'main.log');
+function logLine(kind: string, msg: string) {
+  try {
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+    if (fs.existsSync(LOG_FILE) && fs.statSync(LOG_FILE).size > 2 * 1024 * 1024) fs.renameSync(LOG_FILE, LOG_FILE + '.old');
+    fs.appendFileSync(LOG_FILE, `${new Date().toISOString()} [${kind}] ${msg}
+`);
+  } catch { /* logging must never throw */ }
+}
+process.on('uncaughtException', (err) => logLine('main-exception', err?.stack ?? String(err)));
+process.on('unhandledRejection', (err: any) => logLine('main-rejection', err?.stack ?? String(err)));
+app.on('child-process-gone', (_e, d) => logLine('child-gone', `${d.type} reason=${d.reason} exit=${d.exitCode} ${d.name ?? ''}`));
+function memorySummary(): string {
+  return app.getAppMetrics().map((m) => `${m.type}:${Math.round(m.memory.workingSetSize / 1024)}MB`).join(' ');
+}
 let exportProc: ChildProcess | null = null;
 let rendererDirty = false;
 let forceClose = false;
@@ -77,10 +101,22 @@ function createWindow() {
     }
   });
 
-  // Forward renderer console errors to the terminal (useful when run from a shell).
+  // Forward renderer console errors to the terminal (useful when run from a shell) and the log.
   win.webContents.on('console-message', (_e, level, message) => {
     if (level >= 2) console.error('[renderer]', message);
+    if (level >= 3) logLine('renderer-error', message);
   });
+
+  // If the renderer dies (out of memory, GPU/driver crash…) don't leave a dead window:
+  // log why and reload — the autosave recovery prompt brings the work back.
+  win.webContents.on('render-process-gone', (_e, details) => {
+    logLine('renderer-gone', `reason=${details.reason} exit=${details.exitCode} mem=${memorySummary()}`);
+    if (details.reason !== 'clean-exit' && win && !win.isDestroyed()) setTimeout(() => win?.webContents.reload(), 500);
+  });
+  win.webContents.on('unresponsive', () => logLine('renderer-unresponsive', memorySummary()));
+
+  // Debug aid: `--metrics` prints process memory every 5 s.
+  if (process.argv.includes('--metrics')) setInterval(() => console.log('[metrics]', memorySummary()), 5000);
 
   // Debug aid: `electron . --screenshot=out.png` captures the window after load and quits.
   const shot = process.argv.find((a) => a.startsWith('--screenshot='));
@@ -107,6 +143,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  logLine('start', `v${app.getVersion()} electron ${process.versions.electron}`);
   // Local app: allow microphone access for Audio Studio recording without prompting.
   const { session } = require('electron') as typeof import('electron');
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {

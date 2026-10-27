@@ -385,12 +385,15 @@ export function playDrum(ctx: BaseAudioContext, dest: AudioNode, kit: DrumKitPat
     case 76: tone(1200, 1100, 0.005, 0.07, 'triangle', 0.8); break; // wood block
     default: return null;
   }
+  let lp: BiquadFilterNode | null = null;
   if (style === 'lofi') {
-    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 4500;
+    lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 4500;
     out.disconnect(); out.connect(lp); lp.connect(dest);
   }
-  const voice: Voice = { release: () => {}, kill: () => { for (const s of stops) s(); out.disconnect(); voice.ended = true; } };
-  setTimeout(() => { out.disconnect(); voice.ended = true; }, Math.max(0, (endTime - ctx.currentTime) * 1000 + 100));
+  // free everything once the hit has decayed (the lo-fi filter too, or it stays in the graph forever)
+  const free = () => { out.disconnect(); lp?.disconnect(); voice.ended = true; };
+  const voice: Voice = { release: () => {}, kill: () => { for (const s of stops) s(); free(); } };
+  setTimeout(free, Math.max(0, (endTime - ctx.currentTime) * 1000 + 100));
   return voice;
 }
 
