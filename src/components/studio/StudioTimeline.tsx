@@ -19,6 +19,9 @@ export default function StudioTimeline() {
   const session = useStudio((s) => s.session);
   const pps = useStudio((s) => s.pixelsPerSecond);
   const snapOn = useStudio((s) => s.snapToGrid);
+  const trackScale = useStudio((s) => s.trackScale);
+  const compact = useStudio((s) => s.compactView);
+  const rowH = (t: StudioTrack) => Math.round((compact ? 34 : t.height) * trackScale);
   const grid = useStudio((s) => s.gridDivision);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
@@ -68,7 +71,7 @@ export default function StudioTimeline() {
     const el = scrollRef.current!;
     const rect = el.getBoundingClientRect();
     let y = clientY - rect.top - RULER_H + el.scrollTop;
-    for (const t of session.tracks) { if (y >= 0 && y < t.height) return t; y -= t.height; }
+    for (const t of session.tracks) { const h = rowH(t); if (y >= 0 && y < h) return t; y -= h; }
     return null;
   };
 
@@ -180,13 +183,13 @@ export default function StudioTimeline() {
           </div>
         </div>
         {session.tracks.map((track) => (
-          <div key={track.id} className={`studio-track ${track.kind}`} style={{ height: track.height }}>
+          <div key={track.id} className={`studio-track ${track.kind} ${compact ? 'compact' : ''}`} style={{ height: rowH(track) }}>
             <StudioTrackHeader track={track} width={HEADER_W} />
             <div className={`studio-lane ${dropTarget === track.id ? 'drop' : ''}`} style={{ width: contentW, backgroundSize: `${toX(beat * session.beatsPerBar)}px 100%, ${toX(beat)}px 100%` }}
               onMouseDown={(e) => onLaneDown(e, track)} onDoubleClick={(e) => onLaneDouble(e, track)}
               onDragOver={(e) => onDragOver(e, track)} onDragLeave={() => setDropTarget((d) => (d === track.id ? null : d))} onDrop={(e) => onDrop(e, track)}>
               {session.clips.filter((c) => c.trackId === track.id).map((clip) => (
-                <StudioClipView key={clip.id} clip={clip} track={track} toX={toX} onDown={onClipDown} />
+                <StudioClipView key={clip.id} clip={clip} track={track} height={rowH(track)} compact={compact} toX={toX} onDown={onClipDown} />
               ))}
             </div>
           </div>
@@ -275,6 +278,9 @@ function StudioTrackHeader({ track, width }: { track: StudioTrack; width: number
   return (
     <div className={`track-header studio-header ${selected ? 'selected' : ''}`} style={{ width, borderLeftColor: track.color }} onMouseDown={() => st().selectTrack(track.id)}>
       <div className="header-top">
+        <label className="color-dot" style={{ background: track.color }} title="Track colour">
+          <input type="color" value={track.color} onChange={(e) => st().updateTrack(track.id, { color: e.target.value }, { commit: false })} />
+        </label>
         <span className="kind">{track.kind === 'audio' ? '🎚' : track.instrument?.kind === 'drums' ? '🥁' : '🎹'}</span>
         <input className="track-name" value={track.name} onFocus={() => st().commit()} onChange={(e) => st().updateTrack(track.id, { name: e.target.value }, { commit: false })} />
         <button className="small" onClick={() => { if (confirm(`Remove track "${track.name}"?`)) st().removeTrack(track.id); }} title="Remove track">✕</button>
@@ -296,28 +302,50 @@ function StudioTrackHeader({ track, width }: { track: StudioTrack; width: number
   );
 }
 
-const StudioClipView = memo(function StudioClipView({ clip, track, toX, onDown }: {
-  clip: StudioClip; track: StudioTrack; toX: (t: number) => number;
+const StudioClipView = memo(function StudioClipView({ clip, track, height, compact, toX, onDown }: {
+  clip: StudioClip; track: StudioTrack; height: number; compact: boolean; toX: (t: number) => number;
   onDown: (e: React.MouseEvent, clip: StudioClip, mode: 'move' | 'start' | 'end' | 'fadeIn' | 'fadeOut') => void;
 }) {
   const selected = useStudio((s) => s.selectedClipIds.includes(clip.id));
   const left = toX(clip.start);
   const width = Math.max(3, toX(clip.duration));
   const st = useStudio.getState;
+  const h = height - 4;
+  // fade shapes follow the clip's curve so what you see is what you hear
+  const fadePath = (len: number, out: boolean) => {
+    const w = toX(len); if (w <= 0) return '';
+    const pts: string[] = [];
+    for (let i = 0; i <= 12; i++) {
+      const p = i / 12; const g = clip.fadeCurve === 'exponential' ? p * p : clip.fadeCurve === 'sCurve' ? p * p * (3 - 2 * p) : p;
+      const x = out ? width - w + p * w : p * w; const y = out ? g * h : (1 - g) * h;
+      pts.push(`${x},${y}`);
+    }
+    return out ? `M${width - w},0 L${pts.join(' L')} L${width},0 Z` : `M0,0 L${pts.join(' L')} L${w},0 Z`;
+  };
+  if (compact) {
+    return (
+      <div className={`sclip block ${clip.type} ${selected ? 'selected' : ''}`} style={{ left, width, background: track.color, borderColor: track.color }}
+        onMouseDown={(e) => onDown(e, clip, 'move')} onDoubleClick={(e) => { e.stopPropagation(); if (clip.type === 'pattern') st().openEditor(clip.id); else st().openClipEditor(clip.id); }} title={clip.name}>
+        <div className="sclip-label block-label"><span>{clip.name}</span></div>
+        <div className="trim-handle left" onMouseDown={(e) => onDown(e, clip, 'start')} />
+        <div className="trim-handle right" onMouseDown={(e) => onDown(e, clip, 'end')} />
+      </div>
+    );
+  }
   return (
     <div className={`sclip ${clip.type} ${selected ? 'selected' : ''}`} style={{ left, width, background: track.color + '55', borderColor: track.color }}
       onMouseDown={(e) => onDown(e, clip, 'move')}
       onDoubleClick={(e) => { e.stopPropagation(); if (clip.type === 'pattern') st().openEditor(clip.id); else st().openClipEditor(clip.id); }}
       title={`${clip.name}\n${formatTime(clip.start, true)} → ${formatTime(clip.start + clip.duration, true)}\nDouble-click to ${clip.type === 'pattern' ? 'edit notes' : 'open the clip editor (spectrogram, pitch, effects)'}`}>
       <div className="sclip-label"><span>{clip.name}</span>{clip.type === 'sample' && clip.rate !== 1 && <span className="badge">{clip.rate.toFixed(2)}×</span>}{clip.type === 'sample' && clip.reverse && <span className="badge">rev</span>}{clip.gain !== 1 && <span className="badge">{Math.round(clip.gain * 100)}%</span>}</div>
-      {clip.type === 'sample' ? <WaveCanvas clip={clip} width={width} height={track.height - 22} color={track.color} /> : <NotesPreview clip={clip} width={width} height={track.height - 22} color={track.color} drums={track.instrument?.kind === 'drums'} />}
-      {/* fades */}
-      <svg className="fades" width={width} height={track.height - 4} style={{ pointerEvents: 'none' }}>
-        {clip.fadeIn > 0 && <polygon points={`0,${track.height - 4} 0,0 ${toX(clip.fadeIn)},0`} fill="rgba(0,0,0,0.45)" />}
-        {clip.fadeOut > 0 && <polygon points={`${width},${track.height - 4} ${width},0 ${width - toX(clip.fadeOut)},0`} fill="rgba(0,0,0,0.45)" />}
+      {clip.type === 'sample' ? <WaveCanvas clip={clip} width={width} height={height - 22} color={track.color} /> : <NotesPreview clip={clip} width={width} height={height - 22} color={track.color} drums={track.instrument?.kind === 'drums'} />}
+      {/* fades: shaded area above the curve + a line, so the curve is readable */}
+      <svg className="fades" width={width} height={h} style={{ pointerEvents: 'none' }}>
+        {clip.fadeIn > 0 && <path d={fadePath(clip.fadeIn, false)} fill="rgba(0,0,0,0.5)" stroke="#fff" strokeWidth="1.5" />}
+        {clip.fadeOut > 0 && <path d={fadePath(clip.fadeOut, true)} fill="rgba(0,0,0,0.5)" stroke="#fff" strokeWidth="1.5" />}
       </svg>
-      <div className="fade-handle l" style={{ left: Math.max(0, toX(clip.fadeIn) - 5) }} onMouseDown={(e) => onDown(e, clip, 'fadeIn')} title="Drag: fade in" />
-      <div className="fade-handle r" style={{ right: Math.max(0, toX(clip.fadeOut) - 5) }} onMouseDown={(e) => onDown(e, clip, 'fadeOut')} title="Drag: fade out" />
+      <div className="fade-handle l" style={{ left: Math.max(0, toX(clip.fadeIn) - 6) }} onMouseDown={(e) => onDown(e, clip, 'fadeIn')} title={`Fade in: ${clip.fadeIn.toFixed(2)} s — drag to change`} />
+      <div className="fade-handle r" style={{ right: Math.max(0, toX(clip.fadeOut) - 6) }} onMouseDown={(e) => onDown(e, clip, 'fadeOut')} title={`Fade out: ${clip.fadeOut.toFixed(2)} s — drag to change`} />
       <div className="trim-handle left" onMouseDown={(e) => onDown(e, clip, 'start')} />
       <div className="trim-handle right" onMouseDown={(e) => onDown(e, clip, 'end')} />
     </div>

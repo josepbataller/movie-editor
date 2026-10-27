@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useStudio } from '@/store/useStudio';
 import { PatternClip, NoteEvent, DRUM_NOTES, noteName, SynthPatch, DrumKitPatch, beatsToSeconds } from '@/shared/audioTypes';
 import { getEngine } from '@/engine/audio/engine';
+import { TYPING_KEYS } from './useMusicalTyping';
 import { DRUM_KITS, SYNTH_PRESETS } from '@/engine/audio/presets';
 
 // Note editor for pattern clips: a step sequencer for drum kits, a piano roll for synths,
@@ -65,14 +66,17 @@ function StepInputControls({ clip }: { clip: PatternClip }) {
   const armed = useStudio((s) => s.armedTrackId === clip.trackId);
   const beatsPerBar = useStudio((s) => s.session.beatsPerBar);
   const grid = useStudio((s) => s.gridDivision);
+  const stepLength = useStudio((s) => s.stepLength);
+  const lenName = (b: number) => (b >= 4 ? `${b / 4} bar` : b >= 1 ? `${b}/4` : `1/${Math.round(4 / b)}`);
   return (
     <>
-      <button className={`small ${stepInput ? 'on' : ''}`} onClick={() => st().setStepInput(!stepInput)} title="Type notes with the computer keyboard at the step cursor; the cursor advances by the grid">⌨ Type notes</button>
+      <button className={`small ${stepInput ? 'on' : ''}`} onClick={() => st().setStepInput(!stepInput)} title="Type notes with the computer keyboard at the step cursor. Hold a key to make the note longer; [ and ] change the base length">⌨ Type notes</button>
       {stepInput && (
         <span className="small dim">
-          cursor {Math.floor(cursor / beatsPerBar) + 1}.{(cursor % beatsPerBar) + 1}
+          length <button className="tiny" onClick={() => st().setStepLength(stepLength / 2)} title="Shorter ( [ )">−</button> <b>{lenName(stepLength)}</b> <button className="tiny" onClick={() => st().setStepLength(stepLength * 2)} title="Longer ( ] )">+</button>
+          · cursor {Math.floor(cursor / beatsPerBar) + 1}.{(cursor % beatsPerBar) + 1}
           <button className="tiny" onClick={() => st().setStepCursor(cursor - grid)}>◀</button>
-          <button className="tiny" onClick={() => st().setStepCursor(Math.min(clip.lengthBeats, cursor + grid))} title="Rest / skip a step">▶</button>
+          <button className="tiny" onClick={() => st().setStepCursor(Math.min(clip.lengthBeats, cursor + stepLength))} title="Rest (skip one note length)">▶</button>
           <button className="tiny" onClick={() => st().setStepCursor(0)}>⟲</button>
         </span>
       )}
@@ -136,13 +140,13 @@ function RowFragment({ children }: { children: React.ReactNode }) { return <>{ch
 
 // ---------------------------------------------------------------------------
 
-const ROW_H = 14;
 const LOW = 24, HIGH = 96; // C1..C7
 
 function PianoRoll({ clip, grid, trackId }: { clip: PatternClip; grid: number; trackId: string }) {
   const st = useStudio.getState;
   const wrapRef = useRef<HTMLDivElement>(null);
   const [pxPerBeat, setPxPerBeat] = useState(48);
+  const [ROW_H, setRowH] = useState(14);        // vertical zoom (key height)
   const playBeat = usePatternPlayhead(clip);
   const [selected, setSelected] = useState<string | null>(null);
   const rows = HIGH - LOW + 1;
@@ -160,6 +164,19 @@ function PianoRoll({ clip, grid, trackId }: { clip: PatternClip; grid: number; t
     const centre = clip.notes.length ? Math.round(clip.notes.reduce((a, n) => a + n.pitch, 0) / clip.notes.length) : 66;
     el.scrollTop = Math.max(0, yOfPitch(centre) - el.clientHeight / 2);
   }, [clip.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Ctrl+wheel = horizontal zoom, Ctrl+Shift+wheel = vertical zoom (independent of the arrangement)
+  useEffect(() => {
+    const el = wrapRef.current; if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      const f = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+      if (e.shiftKey) setRowH((h) => Math.min(40, Math.max(6, Math.round(h * f)))); else setPxPerBeat((p) => Math.min(480, Math.max(16, Math.round(p * f))));
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
 
   // (computer-keyboard playing is handled globally by useMusicalTyping)
 
@@ -221,8 +238,10 @@ function PianoRoll({ clip, grid, trackId }: { clip: PatternClip; grid: number; t
     <div className="piano-roll">
       <div className="pr-tools">
         <span className="dim small">Zoom</span>
-        <input type="range" min={16} max={480} value={pxPerBeat} onChange={(e) => setPxPerBeat(Number(e.target.value))} />
-        <span className="dim small">Hold Alt while dragging to place notes freely (no grid).</span>
+        <input type="range" min={16} max={480} value={pxPerBeat} onChange={(e) => setPxPerBeat(Number(e.target.value))} title="Horizontal zoom (Ctrl+wheel)" />
+        <span className="dim small">Keys</span>
+        <input type="range" min={6} max={40} value={ROW_H} onChange={(e) => setRowH(Number(e.target.value))} title="Key height (Ctrl+Shift+wheel)" style={{ width: 90 }} />
+        <span className="dim small">Alt while dragging = free placement (no grid).</span>
       </div>
       <div className="pr-scroll" ref={wrapRef}>
         <div className="pr-inner" style={{ width: 60 + W, height: H }}>
@@ -250,6 +269,46 @@ function PianoRoll({ clip, grid, trackId }: { clip: PatternClip; grid: number; t
           </div>
         </div>
       </div>
+      <KeyboardStrip trackId={trackId} />
+    </div>
+  );
+}
+
+/** On-screen keyboard mirroring the computer keys (two octaves from the typing octave). Click to play. */
+function KeyboardStrip({ trackId }: { trackId: string }) {
+  const octave = useStudio((s) => s.keyboardOctave);
+  const st = useStudio.getState;
+  const base = 12 * (octave + 1);
+  const letters = TYPING_KEYS.toUpperCase();
+  const keys = Array.from({ length: 17 }, (_, i) => ({ pitch: base + i, letter: letters[i] ?? '', black: [1, 3, 6, 8, 10].includes((base + i) % 12) }));
+  const whites = keys.filter((k) => !k.black);
+  const WHITE_W = 34;
+  return (
+    <div className="kbd-strip">
+      <div className="kbd-side">
+        <button className="small" onClick={() => st().setKeyboardOctave(octave - 1)} title="Octave down (Z)">Z ◀</button>
+        <div className="small dim">C{octave}–C{octave + 1}</div>
+        <button className="small" onClick={() => st().setKeyboardOctave(octave + 1)} title="Octave up (X)">▶ X</button>
+      </div>
+      <div className="kbd-keys" style={{ width: whites.length * WHITE_W }}>
+        {whites.map((k, i) => (
+          <div key={k.pitch} className={`kbd-white ${k.pitch % 12 === 0 ? 'c' : ''}`} style={{ left: i * WHITE_W, width: WHITE_W - 1 }}
+            onMouseDown={() => void getEngine().noteOn(trackId, k.pitch)} onMouseUp={() => getEngine().noteOff(trackId, k.pitch)} onMouseLeave={() => getEngine().noteOff(trackId, k.pitch)}>
+            <span className="kbd-letter">{k.letter}</span><span className="kbd-name">{k.pitch % 12 === 0 ? noteName(k.pitch) : ''}</span>
+          </div>
+        ))}
+        {keys.map((k) => {
+          if (!k.black) return null;
+          const whiteIndex = whites.findIndex((w) => w.pitch > k.pitch);
+          return (
+            <div key={k.pitch} className="kbd-black" style={{ left: whiteIndex * WHITE_W - WHITE_W * 0.32, width: WHITE_W * 0.64 }}
+              onMouseDown={(e) => { e.stopPropagation(); void getEngine().noteOn(trackId, k.pitch); }} onMouseUp={() => getEngine().noteOff(trackId, k.pitch)} onMouseLeave={() => getEngine().noteOff(trackId, k.pitch)}>
+              <span className="kbd-letter">{k.letter}</span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="small dim kbd-hint">Hold a key for a longer note · [ ] base length · 1–9 velocity</div>
     </div>
   );
 }

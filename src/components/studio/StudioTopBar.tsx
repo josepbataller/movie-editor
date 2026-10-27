@@ -110,6 +110,7 @@ export default function StudioTopBar({ onExport }: { onExport: () => void }) {
       <button disabled={!canUndo} onClick={() => st().undo()} title="Undo (Ctrl+Z)">↶</button>
       <button disabled={!canRedo} onClick={() => st().redo()} title="Redo (Ctrl+Y)">↷</button>
       <span style={{ marginLeft: 'auto' }} />
+      <ViewControls />
       <MasterMeter />
       <label className="small dim" title="Master volume">Master
         <input type="range" min={0} max={1.5} step={0.01} value={masterGain} onPointerDown={() => st().commit()} onChange={(e) => st().setMasterGain(Number(e.target.value), { commit: false })} style={{ width: 90 }} />
@@ -118,6 +119,18 @@ export default function StudioTopBar({ onExport }: { onExport: () => void }) {
       <button onClick={send} disabled={sending || duration <= 0} title="Render the mix and place it on the video timeline">{sending ? 'Rendering…' : '🎬 Send to video'}</button>
       <button className="primary" onClick={onExport} disabled={duration <= 0} title="Export the mix as WAV / MP3 / FLAC">⬇ Export audio</button>
     </div>
+  );
+}
+
+function ViewControls() {
+  const compact = useStudio((s) => s.compactView);
+  const scale = useStudio((s) => s.trackScale);
+  const st = useStudio.getState;
+  return (
+    <span className="view-controls" title="Arrangement view">
+      <button className={`small ${compact ? 'on' : ''}`} onClick={() => st().setCompactView(!compact)} title="Overview: colour blocks, many tracks on screen (Logic-style)">▤ Blocks</button>
+      <input type="range" min={0.35} max={3} step={0.05} value={scale} onChange={(e) => st().setTrackScale(Number(e.target.value))} style={{ width: 70 }} title="Track height" />
+    </span>
   );
 }
 
@@ -171,6 +184,7 @@ export function useStudioShortcuts() {
       if (ctrl && e.key.toLowerCase() === 'd') { e.preventDefault(); if (st.selectedClipIds.length) st.duplicateClips(st.selectedClipIds); return; }
       if (ctrl && e.key.toLowerCase() === 'a') { e.preventDefault(); st.select(st.session.clips.map((c) => c.id)); return; }
       if (ctrl) return;
+      if (e.key === 'F1') { e.preventDefault(); st.setHelpOpen(!st.helpOpen); return; }
       switch (e.key) {
         case ' ': e.preventDefault(); st.togglePlay(); break;
         case 'Escape': st.setPlaying(false); st.select([]); st.openEditor(null); break;

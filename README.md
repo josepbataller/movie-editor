@@ -77,9 +77,12 @@ project file and media library with the video editor:
   xylophone, glockenspiel, tubular bells, steel drum, kalimba, timpani), Voices, and synth basses /
   leads / pads / FX — 60+ sounds with a **piano roll** and editable parameters. A **Sampler** turns any
   recording or audio file into an instrument (🎹 in *Audio files*).
+- **Built-in manual**: **? Help** (or `F1`) opens a side panel organised by task (Spanish), with a search box.
+- **Views**: **▤ Blocks** shows colour blocks only (Logic-style overview for many tracks); the slider next to it sets track height; click a track's colour dot to recolour it.
 - **Musical typing**: with an instrument track selected, keys A W S E D F T G Y H U J K… play it
-  (Z / X change octave, 1–9 velocity). In the piano roll, **Type notes** writes what you play at the step
-  cursor; **Record notes** (arm the track, play) records live into the pattern. Grid down to 1/64 and
+  (Z / X change octave, 1–9 velocity; an on-screen keyboard shows the mapping). In the piano roll,
+  **Type notes** writes what you play at the step cursor — hold a key to lengthen the note, `[` / `]` set
+  the base length, chords advance together; **Record notes** (arm the track, play) records live into the pattern. Grid down to 1/64 and
   triplets; hold **Alt** while dragging to place freely.
 - **Recording**: arm an audio track (●), press ● / `R`. Optional one-bar count-in, input device choice,
   input monitoring. Takes are saved as WAV next to the project and appear in *Audio files*.

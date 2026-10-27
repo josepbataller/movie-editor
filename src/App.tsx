@@ -10,6 +10,7 @@ import { importViaDialog } from './engine/project/importMedia';
 import { newProjectAction, openProjectAction, saveProjectAction, loadProjectFromPath, installProjectLifecycle, offerRecovery } from './engine/project/projectFile';
 import TitleStudio from './components/video/TitleStudio';
 import StudioApp from './components/studio/StudioApp';
+import HelpPanel from './components/studio/HelpPanel';
 import { renderMixToWav } from './engine/audio/bridge';
 import { getEngine } from './engine/audio/engine';
 import { useStudio } from './store/useStudio';
@@ -18,6 +19,7 @@ export default function App() {
   const exportOpen = useProject((s) => s.exportOpen);
   const titleStudioClipId = useProject((s) => s.titleStudioClipId);
   const workspace = useProject((s) => s.workspace);
+  const helpOpen = useStudio((s) => s.helpOpen);
   const [timelineH, setTimelineH] = useState(300);
   const dragRef = useRef<{ y: number; h: number } | null>(null);
 
@@ -34,6 +36,7 @@ export default function App() {
       if (ctrl && e.key.toLowerCase() === 'n') { e.preventDefault(); newProjectAction(); return; }
       if (ctrl && e.key.toLowerCase() === 'i') { e.preventDefault(); importViaDialog(); return; }
       if (ctrl && e.key.toLowerCase() === 'e') { e.preventDefault(); st.setExportOpen(true); return; }
+      if (e.key === 'F1') { e.preventDefault(); useStudio.getState().setHelpOpen(!useStudio.getState().helpOpen); return; }
       if (typing) {
         if (e.key === 'Escape') (target as HTMLElement).blur();
         return;
@@ -87,6 +90,8 @@ export default function App() {
         if (window.api.startupStudioFx) useStudio.getState().openFx(window.api.startupStudioFx);
         if (window.api.startupStudioEditor) useStudio.getState().openEditor(window.api.startupStudioEditor);
         if (window.api.startupStudioClip) useStudio.getState().openClipEditor(window.api.startupStudioClip);
+        if (window.api.startupFlags.includes('--studio-help')) useStudio.getState().setHelpOpen(true);
+        if (window.api.startupFlags.includes('--studio-blocks')) useStudio.getState().setCompactView(true);
         if (window.api.startupStudioPlay) {
           setTimeout(() => useStudio.getState().setPlaying(true), 800);
           setTimeout(() => { const s = useStudio.getState(); const eng = getEngine(); console.warn(`[studio-play] position ${s.currentTime.toFixed(2)}s playing=${s.playing} engine=${eng.playing} ctx=${eng.ctx.state} ctxTime=${eng.ctx.currentTime.toFixed(2)} enginePos=${eng.position().toFixed(2)}`); s.setPlaying(false); window.api.closeNow(); }, 800 + window.api.startupStudioPlay * 1000);
@@ -137,6 +142,7 @@ export default function App() {
       <div className="bottom" style={{ height: timelineH }}><Timeline /></div>
       {exportOpen && <ExportDialog />}
       {titleStudioClipId && <TitleStudio clipId={titleStudioClipId} />}
+      {helpOpen && <HelpPanel onClose={() => useStudio.getState().setHelpOpen(false)} />}
     </div>
   );
 }

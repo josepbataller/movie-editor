@@ -166,3 +166,48 @@ button.arm.rec { animation: blink 1s infinite; }
 .ce-group .knob-label { width: 90px; }
 .ce-group .knob input[type="range"] { flex: 1; }
 .ce-group .knob-value { width: 110px; text-align: right; }
+
+/* ---------- keyboard strip (pattern editor) ---------- */
+.kbd-strip { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-top: 1px solid var(--border); background: var(--panel); overflow-x: auto; }
+.kbd-side { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.kbd-keys { position: relative; height: 64px; flex-shrink: 0; }
+.kbd-white { position: absolute; top: 0; height: 64px; background: #ecedf1; border-radius: 0 0 4px 4px; color: #333; cursor: pointer; user-select: none; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 3px; }
+.kbd-white.c { background: #fff; }
+.kbd-white:active { background: var(--accent); color: #fff; }
+.kbd-black { position: absolute; top: 0; height: 38px; background: #22242b; border: 1px solid #000; border-radius: 0 0 3px 3px; color: #ddd; z-index: 2; cursor: pointer; user-select: none; display: flex; justify-content: center; align-items: flex-end; padding-bottom: 2px; }
+.kbd-black:active { background: var(--accent); }
+.kbd-letter { font-weight: 700; font-size: 11px; }
+.kbd-name { font-size: 9px; color: #777; }
+.kbd-hint { white-space: nowrap; }
+
+/* ---------- fades: always visible handles ---------- */
+.fade-handle { opacity: 0.75; width: 12px; height: 12px; border: 2px solid #000; }
+.sclip:hover .fade-handle, .sclip.selected .fade-handle { opacity: 1; }
+
+/* ---------- compact ("blocks") view ---------- */
+.sclip.block { border-radius: 3px; }
+.sclip.block .block-label { background: rgba(0,0,0,0.25); height: 100%; align-items: center; font-weight: 600; }
+.studio-track.compact .header-row, .studio-track.compact .instrument-name { display: none; }
+.studio-track.compact .studio-header { padding: 2px 6px; justify-content: center; }
+.color-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; cursor: pointer; border: 1px solid rgba(0,0,0,0.5); position: relative; overflow: hidden; flex-shrink: 0; }
+.color-dot input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.view-controls { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ---------- help panel ---------- */
+.help-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 60; display: flex; justify-content: flex-end; }
+.help-panel { width: min(900px, 92vw); height: 100%; background: var(--panel); border-left: 1px solid var(--border); display: flex; flex-direction: column; box-shadow: -20px 0 60px rgba(0,0,0,0.5); }
+.help-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 15px; }
+.help-head .search { flex: 1; }
+.help-body { display: flex; flex: 1; min-height: 0; }
+.help-nav { width: 240px; border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 8px; gap: 2px; overflow-y: auto; }
+.help-nav button { text-align: left; background: transparent; border-color: transparent; padding: 7px 10px; }
+.help-nav button.on { background: var(--accent); color: #fff; }
+.help-content { flex: 1; overflow-y: auto; padding: 14px 24px 40px; font-size: 14px; line-height: 1.55; max-width: 700px; }
+.help-content h3 { margin: 4px 0 12px; font-size: 20px; }
+.help-content h4 { margin: 16px 0 6px; color: #cfd3dc; }
+.help-content p, .help-content li { margin: 6px 0; }
+.help-content ol, .help-content ul { padding-left: 22px; }
+.help-content kbd { background: #2a2d36; border: 1px solid #454a56; border-bottom-width: 2px; border-radius: 4px; padding: 0 6px; font-family: Consolas, monospace; font-size: 12px; margin: 0 1px; }
+.help-content code { background: #2a2d36; padding: 0 4px; border-radius: 3px; font-size: 12.5px; }
+.help-content .tip { background: rgba(79,140,255,0.12); border-left: 3px solid var(--accent); padding: 6px 10px; border-radius: 4px; }
+.help-content .keys kbd { margin: 1px; }

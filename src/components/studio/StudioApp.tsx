@@ -8,6 +8,7 @@ import PatternEditor from './PatternEditor';
 import ClipEditor from './ClipEditor';
 import { useMusicalTyping } from './useMusicalTyping';
 import StudioExport from './StudioExport';
+import HelpPanel from './HelpPanel';
 import { useEngineSync } from './useEngineSync';
 
 /**
@@ -22,6 +23,7 @@ export default function StudioApp() {
   const clipEditorId = useStudio((s) => (s.clipEditorId && s.session.clips.some((c) => c.id === s.clipEditorId) ? s.clipEditorId : null));
   const fxTarget = useStudio((s) => (s.fxPanelTrackId === 'master' || (s.fxPanelTrackId && s.session.tracks.some((t) => t.id === s.fxPanelTrackId)) ? s.fxPanelTrackId : null));
   const [exportOpen, setExportOpen] = useState(false);
+  const helpOpen = useStudio((s) => s.helpOpen);
   const [bottomH, setBottomH] = useState(380);
   const dragRef = useRef<{ y: number; h: number } | null>(null);
 
@@ -50,6 +52,7 @@ export default function StudioApp() {
         </div>
       </div>
       {exportOpen && <StudioExport onClose={() => setExportOpen(false)} />}
+      {helpOpen && <HelpPanel onClose={() => useStudio.getState().setHelpOpen(false)} />}
     </div>
   );
 }

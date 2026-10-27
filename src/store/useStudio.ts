@@ -41,6 +41,10 @@ interface StudioState {
   keyboardOctave: number;        // base octave for the computer keyboard (4 = C4 on 'A')
   stepInput: boolean;            // typing writes notes into the open pattern
   stepCursor: number;            // beats, position of the step-input cursor
+  stepLength: number;            // beats written per typed note (hold the key to extend)
+  trackScale: number;            // vertical zoom of the arrangement (1 = normal)
+  compactView: boolean;          // Logic-style overview: colour blocks without waveform detail
+  helpOpen: boolean;
 
   setSession: (s: AudioSession | undefined) => void;
   reset: () => void;
@@ -109,6 +113,10 @@ interface StudioState {
   setKeyboardOctave: (o: number) => void;
   setStepInput: (on: boolean) => void;
   setStepCursor: (beats: number) => void;
+  setStepLength: (beats: number) => void;
+  setTrackScale: (s: number) => void;
+  setCompactView: (on: boolean) => void;
+  setHelpOpen: (on: boolean) => void;
 
   /** Swap the audio a sample clip plays (render-in-place). Keeps the original as sourceAssetId. */
   replaceClipAudio: (clipId: string, newAssetId: string, newDuration: number) => void;
@@ -208,6 +216,10 @@ export const useStudio = create<StudioState>((set, get) => {
     keyboardOctave: 4,
     stepInput: false,
     stepCursor: 0,
+    stepLength: 0.25,
+    trackScale: 1,
+    compactView: false,
+    helpOpen: false,
 
     setSession: (s) => set({ session: s ? normalizeSession({ ...defaultSession(), ...s }) : defaultSession(), dirty: false, past: [], future: [], selectedClipIds: [], editorClipId: null, clipEditorId: null, fxPanelTrackId: null, armedTrackId: null, recording: false, currentTime: 0, playing: false }),
     reset: () => get().setSession(undefined),
@@ -430,6 +442,10 @@ export const useStudio = create<StudioState>((set, get) => {
     setKeyboardOctave: (o) => set({ keyboardOctave: Math.min(8, Math.max(0, o)) }),
     setStepInput: (stepInput) => set({ stepInput }),
     setStepCursor: (stepCursor) => set({ stepCursor: Math.max(0, stepCursor) }),
+    setStepLength: (stepLength) => set({ stepLength: Math.min(16, Math.max(1 / 16, stepLength)) }),
+    setTrackScale: (trackScale) => set({ trackScale: Math.min(3, Math.max(0.35, trackScale)) }),
+    setCompactView: (compactView) => set({ compactView }),
+    setHelpOpen: (helpOpen) => set({ helpOpen }),
     replaceClipAudio: (clipId, newAssetId, newDuration) => mutate((s) => ({
       clips: s.clips.map((c) => (c.id === clipId && c.type === 'sample'
         ? { ...c, sourceAssetId: c.sourceAssetId ?? c.assetId, original: c.original ?? { assetId: c.assetId, inPoint: c.inPoint, rate: c.rate, reverse: c.reverse, duration: c.duration },

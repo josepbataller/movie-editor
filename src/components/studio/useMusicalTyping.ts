@@ -16,6 +16,22 @@ const DRUM_KEYS = 'asdfghjkqwertyui';                 // drum pads left to right
 export function useMusicalTyping() {
   useEffect(() => {
     const down = new Map<string, number>();     // key -> pitch
+    // step input: notes being held, extended while the key stays down (at tempo, quantised to the grid)
+    const stepHeld = new Map<number, { noteId: string; clipId: string; start: number; t0: number; maxLen: number }>();
+    let stepTimer: number | null = null;
+    const tickStep = () => {
+      const st = useStudio.getState();
+      const grid = st.gridDivision;
+      for (const h of stepHeld.values()) {
+        const heldBeats = secondsToBeats((performance.now() - h.t0) / 1000, st.session.bpm);
+        const len = Math.max(st.stepLength, Math.ceil(heldBeats / grid) * grid);
+        const clip = st.session.clips.find((c) => c.id === h.clipId) as PatternClip | undefined;
+        if (!clip) continue;
+        const capped = Math.min(len, clip.lengthBeats - h.start);
+        if (capped > h.maxLen + 1e-6) { h.maxLen = capped; st.updateNote(h.clipId, h.noteId, { length: capped }, { commit: false }); }
+      }
+      if (stepHeld.size === 0 && stepTimer != null) { window.clearInterval(stepTimer); stepTimer = null; }
+    };
     const liveStarts = new Map<number, { beat: number; clipId: string; velocity: number }>();
     let velocity = 0.85;
     const engine = getEngine();
@@ -58,6 +74,8 @@ export function useMusicalTyping() {
       const key = e.key.toLowerCase();
       if (key === 'z') { st.setKeyboardOctave(st.keyboardOctave - 1); return; }
       if (key === 'x') { st.setKeyboardOctave(st.keyboardOctave + 1); return; }
+      if (key === '[') { st.setStepLength(st.stepLength / 2); return; }
+      if (key === ']') { st.setStepLength(st.stepLength * 2); return; }
       if (/^[1-9]$/.test(key)) { velocity = Number(key) / 9; return; }
       const tg = target();
       if (!tg) return;
@@ -82,10 +100,12 @@ export function useMusicalTyping() {
         }
       } else if (st.stepInput && tg.editing) {
         const clip = tg.editing;
-        const len = drums ? Math.min(grid, 0.25) : grid;
         if (st.stepCursor + 1e-6 < clip.lengthBeats) {
-          st.addNote(clip.id, { pitch, start: st.stepCursor, length: len, velocity });
-          // chords: keys pressed together land on the same step; advance when the first key is released
+          const len = Math.min(st.stepLength, clip.lengthBeats - st.stepCursor);
+          const noteId = st.addNote(clip.id, { pitch, start: st.stepCursor, length: len, velocity });
+          // holding the key extends the note at tempo; keys pressed together form a chord on the same step
+          stepHeld.set(pitch, { noteId, clipId: clip.id, start: st.stepCursor, t0: performance.now(), maxLen: len });
+          if (stepTimer == null) stepTimer = window.setInterval(tickStep, 30);
         }
       }
     };
@@ -109,13 +129,18 @@ export function useMusicalTyping() {
           const length = st.snapToGrid ? Math.max(grid, Math.round(rawLen / grid) * grid) : rawLen;
           st.addNote(clip.id, { pitch, start: live.beat, length: Math.min(length, clip.lengthBeats - live.beat), velocity: live.velocity });
         }
-      } else if (st.stepInput && tg?.editing && down.size === 0) {
-        // all keys released: advance the step cursor (drums step by the grid too)
-        const grid = st.gridDivision;
-        st.setStepCursor(Math.min(tg.editing.lengthBeats, st.stepCursor + grid));
+      } else if (st.stepInput && tg?.editing) {
+        stepHeld.delete(pitch);
+        if (down.size === 0) {
+          // all keys released: advance the cursor by the longest note of the chord just written
+          const written = st.session.clips.find((c) => c.id === tg.editing!.id) as PatternClip | undefined;
+          const atCursor = written?.notes.filter((n) => Math.abs(n.start - st.stepCursor) < 1e-6) ?? [];
+          const adv = atCursor.length ? Math.max(...atCursor.map((n) => n.length)) : st.stepLength;
+          st.setStepCursor(Math.min(tg.editing.lengthBeats, st.stepCursor + adv));
+        }
       }
     };
-    const releaseAll = () => { const tg = target(); for (const [, p] of down) if (tg) engine.noteOff(tg.track.id, p); down.clear(); liveStarts.clear(); };
+    const releaseAll = () => { const tg = target(); for (const [, p] of down) if (tg) engine.noteOff(tg.track.id, p); down.clear(); liveStarts.clear(); stepHeld.clear(); };
 
     // capture phase so we run before the studio shortcut handler
     window.addEventListener('keydown', onDown, true);

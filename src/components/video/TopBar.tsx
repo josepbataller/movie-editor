@@ -1,6 +1,7 @@
 import { useProject } from '@/store/useProject';
 import { importViaDialog } from '@/engine/project/importMedia';
 import { newProjectAction, openProjectAction, saveProjectAction } from '@/engine/project/projectFile';
+import { useStudio } from '@/store/useStudio';
 
 export default function TopBar() {
   const name = useProject((s) => s.project.name);
@@ -36,6 +37,7 @@ export default function TopBar() {
         <button disabled={!canRedo} onClick={() => st().redo()} title="Redo (Ctrl+Y)">↷ Redo</button>
       </div>
       <div className="project-name">{name}{dirty ? ' •' : ''}</div>
+      <button onClick={() => useStudio.getState().setHelpOpen(true)} title="Help & manual (F1)">? Help</button>
       <button className="primary" onClick={() => st().setExportOpen(true)} title="Export video (Ctrl+E)">⬇ Export video</button>
     </div>
   );
