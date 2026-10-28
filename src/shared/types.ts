@@ -65,11 +65,15 @@ export interface AudioProps {
 export type TextAnimation =
   | 'none' | 'fade' | 'scroll-up' | 'crawl' | 'typewriter'
   | 'slide-left' | 'slide-right' | 'slide-up' | 'slide-down'
-  | 'zoom-in' | 'zoom-out' | 'pop' | 'blur-in' | 'letters' | 'wipe';
-export type TextExitAnimation = 'none' | 'fade' | 'slide-left' | 'slide-right' | 'slide-up' | 'slide-down' | 'zoom-out' | 'zoom-in' | 'blur-out' | 'wipe';
+  | 'zoom-in' | 'zoom-out' | 'pop' | 'blur-in' | 'letters' | 'wipe'
+  | 'glitch' | 'wave' | 'spin-in' | 'flip-in' | 'rise';
+export type TextExitAnimation = 'none' | 'fade' | 'slide-left' | 'slide-right' | 'slide-up' | 'slide-down' | 'zoom-out' | 'zoom-in' | 'blur-out' | 'wipe' | 'glitch' | 'flip-out';
+
+/** Animated full-frame backgrounds drawn behind a text clip (rendered per frame). */
+export type TextBackdrop = 'none' | 'starfield' | 'nebula' | 'gradient' | 'film' | 'matrix' | 'bokeh' | 'scanlines' | 'solid';
 
 /** Text animations that are rendered per-frame (need the frame-by-frame export engine). */
-export const PER_FRAME_TEXT_ANIMATIONS: TextAnimation[] = ['crawl', 'typewriter', 'slide-left', 'slide-right', 'slide-up', 'slide-down', 'zoom-in', 'zoom-out', 'pop', 'blur-in', 'letters', 'wipe'];
+export const PER_FRAME_TEXT_ANIMATIONS: TextAnimation[] = ['crawl', 'typewriter', 'slide-left', 'slide-right', 'slide-up', 'slide-down', 'zoom-in', 'zoom-out', 'pop', 'blur-in', 'letters', 'wipe', 'glitch', 'wave', 'spin-in', 'flip-in', 'rise'];
 
 /** Properties that can be animated over a time range inside a clip. */
 export type AnimatableProperty =
@@ -129,6 +133,17 @@ export interface TextProps {
   exitDuration: number;
   letterSpacing: number;       // px
   boxWidth: number;         // fraction of frame width used for wrapping (0.1..1)
+  /** Neon-style glow: 0 = off, 1 = strong. */
+  glow?: number;
+  glowColor?: string;
+  /** Animated background behind the text (full frame). */
+  backdrop?: TextBackdrop;
+  backdropColor?: string;
+  backdropColor2?: string;
+  /** 'two-column' splits lines on '|' (or ' - ') into role | name, like film credits. */
+  layout?: 'block' | 'two-column';
+  /** Crawl tilt (0.2 = flat/slow recede, 0.9 = steep). */
+  perspective?: number;
 }
 
 interface ClipBase {
@@ -250,6 +265,13 @@ export const DEFAULT_TEXT: TextProps = {
   exitDuration: 0.6,
   letterSpacing: 0,
   boxWidth: 0.8,
+  glow: 0,
+  glowColor: '#4f8cff',
+  backdrop: 'none',
+  backdropColor: '#000000',
+  backdropColor2: '#1a237e',
+  layout: 'block',
+  perspective: 0.6,
 };
 
 /** Size (in project pixels) a source of w×h occupies at scale 1 inside a W×H frame. */

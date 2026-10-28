@@ -135,3 +135,5 @@
 .template-label { font-size: 12px; }
 .studio-form { padding: 10px 12px; overflow-y: auto; }
 .studio-form .field > label { width: 74px; }
+.template.sequence { grid-column: 1 / -1; }
+.template.sequence .template-preview { letter-spacing: 6px; }

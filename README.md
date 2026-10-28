@@ -33,10 +33,13 @@ For development with hot reload: `npm run dev`.
    colour (brightness, contrast, saturation, hue, blur, B&W, sepia, invert, presets),
    fade in/out, speed, volume, mute, audio fades.
 6. **Titles & credits**: *Add text* (`T`) or *Add credits*, then click **Open Title Studio** in the
-   inspector: a pop-up editor with a live, scrubbable preview, drag-to-position, 12 templates
-   (Big title, Star Wars crawl, Pulp Fiction, Rolling credits, Lower third, Typewriter, Kinetic,
-   Elegant, Impact, Subtitle, Wipe, Retro), fonts/size/spacing/colour/outline/shadow/background,
-   and entrance + exit animations (fade, slides, zoom, pop, blur, typewriter, letter-by-letter, wipe).
+   inspector: a pop-up editor with a live, scrubbable preview, drag-to-position, 21 templates
+   (Cinematic, Star Wars crawl with real perspective + the full 3-shot opening, Galaxy, Pulp Fiction,
+   rolling credits, two-column film credits, Neon, Glitch, Matrix, Film noir, Bokeh, Nebula, Lower
+   third, Kinetic, Spin, Comic, Elegant, Subtitle, Retro wave…), animated **backdrops** (starfield,
+   nebula, gradient, old film, Matrix rain, bokeh, scanlines), neon **glow**, fonts/size/spacing/colour/
+   outline/shadow/background, and entrance + exit animations (fade, slides, zoom, pop, blur, typewriter,
+   letters, rise, wave, spin, flip, glitch, wipe).
 7. **Animations over time** (inspector → *Animations*): change blur, brightness, contrast, saturation,
    hue, opacity, zoom, rotation, position or volume between two moments of a clip, with a ramp up,
    a hold and a ramp down (e.g. blur 0→100% over 1 s, hold 3 s, back over 1 s). One-click presets:

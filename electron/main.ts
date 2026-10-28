@@ -125,8 +125,12 @@ function createWindow() {
       setTimeout(async () => {
         const out = shot.split('=')[1];
         try {
-          const img = await win!.webContents.capturePage();
-          fs.writeFileSync(out, img.toPNG());
+          // the viz process is flaky here: retry a few times before falling back
+          let img: Electron.NativeImage | null = null;
+          for (let i = 0; i < 4 && !img; i++) {
+            try { img = await win!.webContents.capturePage(); } catch (e) { if (i === 3) throw e; await new Promise((r) => setTimeout(r, 700)); }
+          }
+          fs.writeFileSync(out, img!.toPNG());
         } catch (err) {
           // capturePage can fail when the GPU/viz process is flaky; fall back to the main canvas pixels
           console.error('[screenshot] capturePage failed, saving canvas instead:', String(err));

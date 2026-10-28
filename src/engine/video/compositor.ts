@@ -46,7 +46,8 @@ export function clipBoundsWith(project: Project, clip: VisualClip, tf: Transform
   const h = fitted.h * tf.scale;
   const cx = project.width / 2 + tf.x;
   let cy = project.height / 2 + tf.y;
-  if (clip.type === 'text' && clip.text.animation === 'scroll-up') {
+  // credits roll: block mode only (with an animated backdrop the renderer returns a full frame that already moves)
+  if (clip.type === 'text' && clip.text.animation === 'scroll-up' && !(clip.text.backdrop && clip.text.backdrop !== 'none')) {
     const local = time - clip.start;
     const top = project.height - (local * (project.height + h)) / clip.duration;
     cy = top + h / 2 + tf.y;

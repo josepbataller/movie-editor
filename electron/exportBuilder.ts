@@ -47,6 +47,8 @@ export function needsFrameEngine(project: Project): boolean {
     if (c.animations?.some((a) => a.property !== 'volume')) return true;
     if (c.type === 'text' && PER_FRAME_TEXT_ANIMATIONS.includes(c.text.animation)) return true;
     if (c.type === 'text' && c.text.exitAnimation !== 'none' && c.text.exitAnimation !== 'fade') return true;
+    if (c.type === 'text' && c.text.backdrop && c.text.backdrop !== 'none') return true;
+    if (c.type === 'text' && (c.text.glow ?? 0) > 0 && c.text.animation === 'scroll-up') return true;
     return false;
   });
 }
