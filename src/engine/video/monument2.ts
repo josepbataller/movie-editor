@@ -19,7 +19,9 @@ export function renderMonument2(t: TextProps, W: number, H: number, localT: numb
 
   // World coordinates: y points up, negative z is towards the viewer.
   const heights = lines.map((_, i) => i === 0 ? 150 : 112);
-  const total = heights.reduce((a, b) => a + b + 24, 0) + 100;
+  // Leave headroom for the rear edge of the slab above as the camera orbits.
+  const tierSpacing = 48;
+  const total = heights.reduce((a, b) => a + b + tierSpacing, 0) + 100;
   const size = Math.min(W / 1280, H / 720) * Math.min(1, 550 / total) * Math.max(0.15, t.fontSize / 210);
   const yaw = -0.58 + 0.34 * p, pitch = 0.13 + 0.025 * p;
   const distance = 1750 + 200 * p;
@@ -75,7 +77,7 @@ export function renderMonument2(t: TextProps, W: number, H: number, localT: numb
 
   let y = total;
   const rows = lines.map((line, i) => {
-    const h = heights[i]; y -= h + 24;
+    const h = heights[i]; y -= h + tierSpacing;
     const m = layer('monument2-measure', 1, 1);
     m.font = fontString(t, h / 0.75); m.letterSpacing = `${t.letterSpacing || 0}px`;
     const width = Math.max(1, m.measureText(line).width);
@@ -84,8 +86,8 @@ export function renderMonument2(t: TextProps, W: number, H: number, localT: numb
   // Draw from the lower tiers upward so the front lettering hides rear extrusion.
   for (let i = rows.length-1; i >= 0; i--) {
     const row = rows[i], slabW = Math.max(row.w + 46, 560 + i*80);
-    box(0, row.y-2, -42, slabW+18, 11, 212, '#f0c879', '#af7940', '#755039');
-    box(0, row.y+9, -32, slabW, 15, 190, '#f9d787', '#b58142', '#60402c');
+    box(0, row.y-2, -42, slabW+18, 11, 142, '#f0c879', '#af7940', '#755039');
+    box(0, row.y+9, -32, slabW, 15, 120, '#f9d787', '#b58142', '#60402c');
     const tw = Math.ceil(Math.min(2048, Math.max(64, row.w*2))), th = Math.ceil(row.h*2+12);
     const texture = layer('monument2-letters', tw, th);
     texture.font = fontString(t, row.fontSize*2); texture.letterSpacing = `${(t.letterSpacing || 0)*2}px`;
