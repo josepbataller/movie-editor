@@ -13,6 +13,16 @@ const api = {
   /** Encode a WAV to mp3/flac/aac/ogg with FFmpeg. */
   encodeAudio: (wavPath: string, outPath: string, format: string, bitrate?: string): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('audio:encode', wavPath, outPath, format, bitrate),
   audioExportDialog: (defaultName: string, format: string): Promise<string | null> => ipcRenderer.invoke('dialog:exportAudio', defaultName, format),
+  // --- AI assistant ---
+  aiGetSettings: () => ipcRenderer.invoke('ai:getSettings'),
+  aiSaveSettings: (s: unknown) => ipcRenderer.invoke('ai:saveSettings', s),
+  aiChat: (req: unknown) => ipcRenderer.invoke('ai:chat', req),
+  aiTest: (): Promise<{ ok: boolean; text: string }> => ipcRenderer.invoke('ai:test'),
+  aiTranscribe: (wavPath: string, language?: string): Promise<string> => ipcRenderer.invoke('ai:transcribe', wavPath, language),
+  aiListChats: () => ipcRenderer.invoke('ai:listChats'),
+  aiLoadChat: (id: string) => ipcRenderer.invoke('ai:loadChat', id),
+  aiSaveChat: (chat: unknown) => ipcRenderer.invoke('ai:saveChat', chat),
+  aiDeleteChat: (id: string) => ipcRenderer.invoke('ai:deleteChat', id),
   /** Offline FFmpeg processing of a WAV (pitch shift, time stretch, denoise, loudness) -> new temp WAV path. */
   processAudio: (inPath: string, op: { type: 'pitch'; semitones: number } | { type: 'tempo'; factor: number } | { type: 'denoise'; strength: number } | { type: 'loudnorm' } | { type: 'filter'; graph: string }): Promise<{ ok: boolean; path?: string; error?: string }> => ipcRenderer.invoke('audio:process', inPath, op),
   tempPath: (name: string): Promise<string> => ipcRenderer.invoke('app:tempPath', name),
@@ -76,7 +86,9 @@ const api = {
   /** Debug: `--studio-play=<seconds>` plays the studio session for N seconds (surfaces scheduling errors) and quits. */
   startupStudioPlay: Number(process.argv.find((a) => a.startsWith('--studio-play='))?.slice(14) ?? 0) || 0,
   startupStudioFx: process.argv.find((a) => a.startsWith('--studio-fx='))?.slice(12) ?? null,
-  startupFlags: process.argv.filter((a) => a.startsWith('--studio-')),
+  startupFlags: process.argv.filter((a) => a.startsWith('--studio-') || a === '--assistant'),
+  /** Debug: `--assistant-prompt=<text>` sends a message to the assistant headlessly, logs the outcome and quits. */
+  startupAssistantPrompt: process.argv.find((a) => a.startsWith('--assistant-prompt='))?.slice(19) ?? null,
   startupStudioClip: process.argv.find((a) => a.startsWith('--studio-clip='))?.slice(14) ?? null,
   startupStudioEditor: process.argv.find((a) => a.startsWith('--studio-editor='))?.slice(16) ?? null,
   /** Debug: `--seek=<seconds>` positions the playhead after the startup project loads. */

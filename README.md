@@ -99,6 +99,36 @@ project file and media library with the video editor:
   the video timeline. From the video editor, *Open in Audio Studio* takes any clip's sound to a studio
   track for detailed work.
 
+## AI assistant (edit by prompting)
+
+**🤖 Assistant** in the top bar (or Ctrl+/) opens a chat that *acts* on the project: it calls the same
+actions the UI uses (add tracks/effects/EQ bands, write patterns, process a clip's frequencies
+between two times, add titles, animate clips, change layouts, transport…). Every request is one
+Ctrl+Z step; what it did is shown as cards. Chats are saved locally and associated with the open
+project. Configure the model in ⚙: Anthropic (Messages API) or any OpenAI-compatible endpoint
+(OpenAI, Gemini, Ollama, Groq, Mistral…) with base URL, model and API key — keys are stored only in
+`%APPDATA%\Movie Editor\ai-settings.json`. Dictation (🎙) uses an OpenAI-compatible
+`/audio/transcriptions` endpoint (Whisper); Anthropic alone has none, so dictation stays off.
+
+Testing offline: `node scripts/mock-llm.js` runs a scripted OpenAI-compatible server; point the
+settings at `http://127.0.0.1:8765/v1` and run
+`npx electron . --open=<project> --assistant-prompt="…"` to exercise the whole pipeline.
+
+## AI assistant (edit by prompting)
+
+**🤖 Assistant** in the top bar (or Ctrl+/) opens a chat that *acts* on the project: it calls the same
+actions the UI uses (add tracks/effects/EQ bands, write patterns, process a clip's frequencies
+between two times, add titles, animate clips, change layouts, transport…). Every request is one
+Ctrl+Z step; what it did is shown as cards. Chats are saved locally and associated with the open
+project. Configure the model in ⚙: Anthropic (Messages API) or any OpenAI-compatible endpoint
+(OpenAI, Gemini, Ollama, Groq, Mistral…) with base URL, model and API key — keys are stored only in
+. Dictation (🎙) uses an OpenAI-compatible
+ endpoint (Whisper); Anthropic alone has none, so dictation stays off.
+
+Testing offline: mock llm on 8765 runs a scripted OpenAI-compatible server; point the
+settings at  and run
+ to exercise the whole pipeline.
+
 ## Keyboard shortcuts
 
 | Key | Action |
@@ -119,6 +149,8 @@ project file and media library with the video editor:
 | Ctrl+S / Ctrl+Shift+S | Save / save as |
 | Ctrl+O / Ctrl+N | Open / new project |
 | Ctrl+E | Export |
+| Ctrl+/ | AI assistant |
+| Ctrl+/ | AI assistant |
 | + / − , Ctrl+wheel | Zoom timeline |
 | Esc | Deselect |
 

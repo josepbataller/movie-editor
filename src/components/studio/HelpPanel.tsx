@@ -127,6 +127,19 @@ const SECTIONS: Section[] = [
     ),
   },
   {
+    id: 'assistant', title: 'Asistente IA (editar hablando)', icon: '🤖', body: (
+      <>
+        <p>Botón <b>🤖 Assistant</b> (o <K>Ctrl+/</K>): un chat que <b>ejecuta acciones</b> en la app. Pide cosas como «en la pista de voz, de 0:10 a 0:14 quita las frecuencias por encima de 5 kHz», «añade una batería 808 con un ritmo de 4 compases a 95 BPM», «pon un título estilo Star Wars con este texto» o «haz que el clip B sea PiP arriba a la derecha y gire 360° en 2 s».</p>
+        <ol>
+          <li><b>Configura el modelo</b> en ⚙: elige un preajuste (Anthropic, OpenAI, Gemini, Ollama local, Groq…), pega tu clave y pulsa <i>Test connection</i>. La clave se guarda solo en este ordenador.</li>
+          <li>Escribe (Enter envía) o <b>dicta</b> con 🎙 — el dictado necesita un servicio de transcripción compatible con Whisper (OpenAI, Groq…); con Anthropic solo, queda desactivado.</li>
+          <li>Cada acción aparece como una tarjeta ✔; todo lo que cambie una petición se deshace con un solo <K>Ctrl+Z</K>.</li>
+        </ol>
+        <p className="tip">Los chats se guardan y se asocian al proyecto abierto (lista izquierda; <i>all</i> muestra los de todos los proyectos). Sé concreto con tiempos, pistas y frecuencias: el asistente consulta el estado del proyecto antes de actuar.</p>
+      </>
+    ),
+  },
+  {
     id: 'shortcuts', title: 'Atajos', icon: '⌨', body: (
       <>
         <h4>Comunes</h4>

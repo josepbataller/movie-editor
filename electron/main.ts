@@ -7,6 +7,7 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import type { Project, ExportSettings, ExportProgress, MediaAsset } from '../src/shared/types';
 import { buildFfmpegCommand, buildFramesCommand } from './exportBuilder';
+import { registerAiIpc } from './ai';
 
 const require = createRequire(__filename);
 
@@ -62,7 +63,7 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       // Forward startup flags / a double-clicked .mvproj path to the preload script.
-      additionalArguments: process.argv.filter((a) => a.startsWith('--open=') || a.startsWith('--seek=') || a.startsWith('--export=') || a.startsWith('--select=') || a === '--studio' || a.startsWith('--workspace=') || a.startsWith('--export-audio=') || a.startsWith('--studio-fx=') || a.startsWith('--studio-editor=') || a.startsWith('--studio-') || a.startsWith('--studio-play=') || /\.mvproj$/i.test(a)),
+      additionalArguments: process.argv.filter((a) => a.startsWith('--open=') || a.startsWith('--seek=') || a.startsWith('--export=') || a.startsWith('--select=') || a === '--studio' || a.startsWith('--workspace=') || a.startsWith('--export-audio=') || a.startsWith('--studio-fx=') || a.startsWith('--studio-editor=') || a.startsWith('--studio-') || a === '--assistant' || a.startsWith('--assistant-prompt=') || a.startsWith('--studio-play=') || /\.mvproj$/i.test(a)),
       contextIsolation: true,
       nodeIntegration: false,
       // Allow <video>/<img> to load local files via file:// (local-only app).
@@ -153,6 +154,7 @@ app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
     callback(permission === 'media' || permission === 'audioCapture' as string);
   });
+  registerAiIpc();
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

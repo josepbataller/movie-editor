@@ -183,8 +183,9 @@ export default function TitleStudio({ clipId }: { clipId: string }) {
     up({ ...tpl.text }, false);
     st().updateTransform(clipId, { x: 0, y: tpl.y ? Math.round(project.height * tpl.y) : 0, scale: 1, rotation: 0 }, { commit: false });
     if (tpl.bg) st().updateProjectSettings({ backgroundColor: tpl.bg });
-    if (tpl.text.animation === 'crawl' && clip.duration < 15) st().updateClip(clipId, { duration: 20 }, { commit: false });
-    if (tpl.text.animation === 'scroll-up' && clip.duration < 8) st().updateClip(clipId, { duration: 12 }, { commit: false });
+    // templates without an explicit duration still get a sensible length for whole-clip animations
+    if (!tpl.duration && tpl.text.animation === 'crawl' && clip.duration < 15) st().updateClip(clipId, { duration: 20 }, { commit: false });
+    if (!tpl.duration && tpl.text.animation === 'scroll-up' && clip.duration < 8) st().updateClip(clipId, { duration: 12 }, { commit: false });
     restart();
   };
 
@@ -205,6 +206,9 @@ export default function TitleStudio({ clipId }: { clipId: string }) {
         st().updateClip(id, { name: i === 1 ? 'Star Wars: logo' : 'Star Wars: crawl', fadeIn: 0, fadeOut: 0 }, { commit: false });
         // addTextClip commits on its own: fold it into this single undo step
         useProject.setState((s) => ({ past: s.past.slice(0, -1) }));
+        // the clip may have been pushed later if something was in the way: continue from where it really landed
+        const placed = useProject.getState().project.clips.find((c) => c.id === id);
+        if (placed) start = placed.start;
       }
       start += shot.duration;
     });

@@ -49,6 +49,17 @@ Folders are split the same way everywhere (`video/`, `audio/`/`studio/`, shared/
   audio graph of the "frames" engine. `needsFrameEngine()` decides which engine a project needs.
 - `electron/main.ts` — windows, dialogs, ffprobe, thumbnails, export processes, frame decoders,
   audio extraction/encoding. `electron/preload.ts` is the only bridge (`window.api`).
+- `electron/ai.ts` — AI assistant backend (provider adapters, STT, chat files, IPC); keys never reach
+  the renderer. `src/engine/ai/tools.ts` = tool schemas + executors over the stores (add a tool there
+  when a new UI capability appears), `src/engine/ai/agent.ts` = loop + undo squashing,
+  `src/components/assistant/` = chat panel. Test offline with `scripts/mock-llm.js` + `--assistant-prompt`.
+- `src/engine/video/backdrops.ts` animated title backgrounds; `src/engine/audio/clipOps.ts` render-in-place ops shared by the clip editor and the assistant.
+- `electron/ai.ts` — AI assistant backend (provider adapters, STT, chat files, IPC); keys never reach
+  the renderer. `src/engine/ai/tools.ts` = tool schemas + executors over the stores (add a tool there
+  when a new UI capability appears), `src/engine/ai/agent.ts` = loop + undo squashing,
+  `src/components/assistant/` = chat panel. Test offline with `scripts/mock-llm.js` + `--assistant-prompt`.
+- `src/engine/video/backdrops.ts` animated title backgrounds; `src/engine/audio/clipOps.ts` render-in-place
+  ops shared by the clip editor and the assistant.
 
 ## Conventions
 
