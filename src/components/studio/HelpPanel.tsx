@@ -40,8 +40,11 @@ const SECTIONS: Section[] = [
   {
     id: 'titles', title: 'Títulos y créditos', icon: '✨', body: (
       <>
-        <p><b>Add text</b> (<K>T</K>) o <b>Add credits</b>, y luego <b>✨ Open Title Studio</b> en el inspector: vista previa animada, arrastre del texto, 12 plantillas (Star Wars, Pulp Fiction, créditos, tercio inferior, máquina de escribir…), tipografía, contorno, sombra, fondo, y animaciones de entrada y salida.</p>
-        <p className="tip">Los créditos rodantes y el <i>crawl</i> de Star Wars ocupan todo el clip: alarga el clip para que vayan más despacio.</p>
+        <p><b>Add text</b> (<K>T</K>) o <b>Add credits</b>, y luego <b>✨ Open Title Studio</b> en el inspector: vista previa animada, arrastre del texto, más de 100 plantillas por categorías (intros de estudio, películas y series, fiesta, creadores, retro, moderno, naturaleza, básico) con buscador.</p>
+        <p><b>Intros de estudio con tu palabra</b>: en la categoría <i>Studio intros</i> hay recreaciones al estilo Marvel (páginas de cómic dentro de las letras que se vuelven rojo y blanco), Disney (caligrafía con estela de polvo de hadas y fuegos artificiales), Pixar (foco que salta por las letras), DreamWorks (luna con nubes), Universal, 20th Century (focos de estreno), Netflix, HBO… Aplica la plantilla y escribe tu nombre en el cuadro de texto.</p>
+        <p><b>Estilo</b>: relleno (degradado, arcoíris, oro, plata, cromo, fuego, hielo), profundidad 3D, contorno con grosor, brillo neón, fondos animados (disco, confeti, fuegos artificiales, nubes, luna, nieve, lluvia, rejilla synthwave, estática de TV…).</p>
+        <p><b>Animación</b>: ~40 entradas (rebote, sello, péndulo, foco, parpadeo neón, letra a letra, palabra a palabra, persianas, pixelado, barrido de luz, foco saltarín, cometa de chispas, cómic…) y ~20 salidas (letras que se dispersan, caída por gravedad, pixelado…). La pestaña <b>Motion FX</b> apila encima zoom, giro, sacudida, desenfoque, brillo, contraste o color en cualquier tramo de tiempo (con rampas), igual que la sección <i>Animations</i> del inspector.</p>
+        <p className="tip">Los créditos rodantes y el <i>crawl</i> de Star Wars ocupan todo el clip: alarga el clip para que vayan más despacio. También puedes pedirle al asistente: «pon una intro estilo Marvel con la palabra BATALLER».</p>
       </>
     ),
   },

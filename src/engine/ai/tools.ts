@@ -7,6 +7,7 @@ import { instrumentByName, ALL_INSTRUMENTS } from '@/engine/audio/presets';
 import { ANIMATION_PRESETS, newSegment } from '@/engine/video/animation';
 import { AudioEffect, AudioEffectType, EqBand, NoteEvent, defaultEffect, uidA, noteName, DRUM_NOTES, beatsToSeconds, secondsToBeats } from '@/shared/audioTypes';
 import { AnimatableProperty, DEFAULT_TEXT, TextProps, fittedSize } from '@/shared/types';
+import { TITLE_TEMPLATES, findTemplate, templateStyle } from '@/engine/video/titleTemplates';
 
 // Tools the assistant can call. Each tool has a JSON schema (for the model) and an
 // executor that works through the same store actions the UI uses, so everything it
@@ -327,11 +328,24 @@ export const TOOLS: ToolDef[] = [
     run: ({ asset, start, track }) => { const a = findAsset(asset); const id = video().addClipFromAsset(a.id, { start, trackId: track }); if (!id) throw new Error('Could not add clip'); return ok(`clip [${id}] "${a.name}" added`); },
   },
   {
-    name: 'video_add_text', description: 'Add a title / credits text clip. Optional style fields (fontFamily, fontSize, color, bold, align, animation [fade|slide-left|slide-right|slide-up|slide-down|zoom-in|zoom-out|pop|blur-in|typewriter|letters|rise|wave|wipe|spin-in|flip-in|glitch|scroll-up|crawl], exitAnimation, backdrop [none|starfield|nebula|gradient|film|matrix|bokeh|scanlines|solid], glow 0–1, layout [block|two-column]).',
-    parameters: obj({ content: str('Text (use \\n for lines)'), start: num('Timeline seconds (default playhead)'), duration: num('s (default 5; crawl ~30–45)'), style: { type: 'object', description: 'TextProps overrides', additionalProperties: true } }, ['content']),
-    run: ({ content, start, duration, style }) => {
-      const id = video().addTextClip({ start, duration: duration ?? 5, text: { ...(style ?? {}), content } as Partial<TextProps> });
-      return ok(`text clip [${id}] added${style?.animation ? ` (${style.animation})` : ''}`);
+    name: 'video_add_text', description: 'Add a title / credits text clip. Easiest: pass a template id from video_list_title_templates (studio intros like marvel/disney/pixar/dreamworks/netflix, movie styles, party, retro…) plus the user\'s text; style fields override the template. Style fields: fontFamily, fontSize, color, bold, align, fill [solid|gradient|rainbow|gold|silver|chrome|fire|ice], fillColor2, extrude (3D px), extrudeColor, outline, glow 0–1, animation [fade|slide-*|zoom-in|zoom-out|pop|bounce-in|stamp|swing|blur-in|focus|flicker|tracking-in|typewriter|letters|rise|words|elastic-letters|scatter-in|flip-letters|wipe|blinds|split|pixelate|spin-in|flip-in|glitch|shine|spotlight|sparkle|marvel|wave|rainbow|pulse|scroll-up|crawl], animationDuration, exitAnimation [fade|slide-*|zoom-out|zoom-in|blur-out|wipe|blinds-out|split-out|pixelate-out|flip-out|spin-out|drop-out|glitch|flicker-out|tracking-out|scatter|letters-out], backdrop (see templates: starfield, nebula, disco, confetti, fireworks, clouds, moon, fire, snow, grid, static…), backdropColor, backdropColor2, layout [block|two-column].',
+    parameters: obj({ content: str('Text (use \\n for lines)'), template: str('Template id (optional)'), start: num('Timeline seconds (default playhead)'), duration: num('s (default: template duration or 5; crawl ~30–45)'), style: { type: 'object', description: 'TextProps overrides', additionalProperties: true } }, ['content']),
+    run: ({ content, template, start, duration, style }) => {
+      const tpl = template ? findTemplate(String(template)) : undefined;
+      if (template && !tpl) throw new Error(`Unknown template "${template}" (use video_list_title_templates)`);
+      const text = { ...(tpl ? templateStyle(tpl) : {}), ...(style ?? {}), content } as Partial<TextProps>;
+      const id = video().addTextClip({ start, duration: duration ?? tpl?.duration ?? 5, text });
+      if (tpl?.y) video().updateTransform(id, { y: Math.round(video().project.height * tpl.y) }, { commit: false });
+      return ok(`text clip [${id}] added${tpl ? ` (template ${tpl.id})` : style?.animation ? ` (${style.animation})` : ''}`);
+    },
+  },
+  {
+    name: 'video_list_title_templates', description: 'List the Title Studio templates (id, label, category, what it looks like). Categories: studio (logo intros à la Marvel, Disney, Pixar, DreamWorks, Netflix…), movies, party, creators, retro, modern, nature, basic.',
+    parameters: obj({ category: str('Filter by category (optional)'), search: str('Text filter on label/hint (optional)') }),
+    run: ({ category, search }) => {
+      const q = search ? String(search).toLowerCase() : '';
+      const list = TITLE_TEMPLATES.filter((t) => (!category || t.category === category) && (!q || `${t.label} ${t.hint} ${t.id}`.toLowerCase().includes(q)));
+      return list.map((t) => `${t.id} [${t.category}] ${t.label} — ${t.hint}${t.duration ? ` (${t.duration}s)` : ''}`).join('\n') || 'No templates match.';
     },
   },
   {

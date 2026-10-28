@@ -33,13 +33,23 @@ For development with hot reload: `npm run dev`.
    colour (brightness, contrast, saturation, hue, blur, B&W, sepia, invert, presets),
    fade in/out, speed, volume, mute, audio fades.
 6. **Titles & credits**: *Add text* (`T`) or *Add credits*, then click **Open Title Studio** in the
-   inspector: a pop-up editor with a live, scrubbable preview, drag-to-position, 21 templates
-   (Cinematic, Star Wars crawl with real perspective + the full 3-shot opening, Galaxy, Pulp Fiction,
-   rolling credits, two-column film credits, Neon, Glitch, Matrix, Film noir, Bokeh, Nebula, Lower
-   third, Kinetic, Spin, Comic, Elegant, Subtitle, Retro wave…), animated **backdrops** (starfield,
-   nebula, gradient, old film, Matrix rain, bokeh, scanlines), neon **glow**, fonts/size/spacing/colour/
-   outline/shadow/background, and entrance + exit animations (fade, slides, zoom, pop, blur, typewriter,
-   letters, rise, wave, spin, flip, glitch, wipe).
+   inspector: a pop-up editor with a live, scrubbable preview, drag-to-position and **140+ templates**
+   in categories with a search box. *Studio intros* recreate famous logo openings with **your own word**:
+   Marvel-style flipping comic pages inside the letters that freeze to red/white, Disney-style script
+   with a fairy-dust comet over fireworks, Pixar-style hopping spotlight, DreamWorks-style moon,
+   Universal, 20th Century searchlights, Netflix, HBO static, Paramount, Warner, MTV, Nickelodeon…
+   *Movies & TV* (Star Wars crawl with real perspective + the 3-shot opening, Pulp Fiction, Stranger
+   Things, Matrix, Tron, Harry Potter, Blade Runner, Jurassic, Barbie, Spider-Verse, Frozen, Mario,
+   Pokémon, Game of Thrones, Friends…), *Party* (disco, confetti, fireworks, wedding, Christmas,
+   Halloween, pride…), *Creators*, *Retro*, *Modern*, *Nature*, *Basic*. Style: fills (gradient,
+   rainbow, gold, silver, chrome, fire, ice), **3D extrusion**, outline width, neon glow, 40 animated
+   **backdrops** (starfield, nebula, disco lights, confetti, fireworks, clouds, moon, searchlights,
+   synthwave grid, TV static, rain, snow, fire, aurora, halftone, speed lines…), vertical position.
+   ~40 entrances (bounce, stamp, swing, focus, flicker, tracking, letters/words, blinds, split,
+   pixelate, shine, spotlight, sparkle comet, comic pages, rainbow cycle, pulse…) and ~20 exits
+   (scatter, drop, pixelate, spin away…). The **Motion FX** tab stacks zoom/spin/shake/blur/colour
+   changes over any time range on top. The assistant can apply any template by id ("a Marvel-style
+   intro with the word BATALLER").
 7. **Animations over time** (inspector → *Animations*): change blur, brightness, contrast, saturation,
    hue, opacity, zoom, rotation, position or volume between two moments of a clip, with a ramp up,
    a hold and a ramp down (e.g. blur 0→100% over 1 s, hold 3 s, back over 1 s). One-click presets:
@@ -113,21 +123,6 @@ project. Configure the model in ⚙: Anthropic (Messages API) or any OpenAI-comp
 Testing offline: `node scripts/mock-llm.js` runs a scripted OpenAI-compatible server; point the
 settings at `http://127.0.0.1:8765/v1` and run
 `npx electron . --open=<project> --assistant-prompt="…"` to exercise the whole pipeline.
-
-## AI assistant (edit by prompting)
-
-**🤖 Assistant** in the top bar (or Ctrl+/) opens a chat that *acts* on the project: it calls the same
-actions the UI uses (add tracks/effects/EQ bands, write patterns, process a clip's frequencies
-between two times, add titles, animate clips, change layouts, transport…). Every request is one
-Ctrl+Z step; what it did is shown as cards. Chats are saved locally and associated with the open
-project. Configure the model in ⚙: Anthropic (Messages API) or any OpenAI-compatible endpoint
-(OpenAI, Gemini, Ollama, Groq, Mistral…) with base URL, model and API key — keys are stored only in
-. Dictation (🎙) uses an OpenAI-compatible
- endpoint (Whisper); Anthropic alone has none, so dictation stays off.
-
-Testing offline: mock llm on 8765 runs a scripted OpenAI-compatible server; point the
-settings at  and run
- to exercise the whole pipeline.
 
 ## Keyboard shortcuts
 

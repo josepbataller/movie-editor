@@ -66,14 +66,35 @@ export type TextAnimation =
   | 'none' | 'fade' | 'scroll-up' | 'crawl' | 'typewriter'
   | 'slide-left' | 'slide-right' | 'slide-up' | 'slide-down'
   | 'zoom-in' | 'zoom-out' | 'pop' | 'blur-in' | 'letters' | 'wipe'
-  | 'glitch' | 'wave' | 'spin-in' | 'flip-in' | 'rise';
-export type TextExitAnimation = 'none' | 'fade' | 'slide-left' | 'slide-right' | 'slide-up' | 'slide-down' | 'zoom-out' | 'zoom-in' | 'blur-out' | 'wipe' | 'glitch' | 'flip-out';
+  | 'glitch' | 'wave' | 'spin-in' | 'flip-in' | 'rise'
+  // per-letter / per-word staggers
+  | 'words' | 'elastic-letters' | 'scatter-in' | 'flip-letters'
+  // whole-block moves
+  | 'tracking-in' | 'bounce-in' | 'stamp' | 'swing' | 'focus' | 'flicker' | 'blinds' | 'split' | 'pixelate'
+  // light / masks (studio-logo style)
+  | 'shine' | 'spotlight' | 'sparkle' | 'marvel'
+  // whole-clip loops
+  | 'rainbow' | 'pulse';
+export type TextExitAnimation =
+  | 'none' | 'fade' | 'slide-left' | 'slide-right' | 'slide-up' | 'slide-down' | 'zoom-out' | 'zoom-in' | 'blur-out' | 'wipe' | 'glitch' | 'flip-out'
+  | 'scatter' | 'letters-out' | 'tracking-out' | 'pixelate-out' | 'blinds-out' | 'split-out' | 'spin-out' | 'drop-out' | 'flicker-out';
 
 /** Animated full-frame backgrounds drawn behind a text clip (rendered per frame). */
-export type TextBackdrop = 'none' | 'starfield' | 'nebula' | 'gradient' | 'film' | 'matrix' | 'bokeh' | 'scanlines' | 'solid';
+export type TextBackdrop =
+  | 'none' | 'solid' | 'starfield' | 'nebula' | 'gradient' | 'film' | 'matrix' | 'bokeh' | 'scanlines'
+  | 'disco' | 'confetti' | 'fireworks' | 'clouds' | 'sunburst' | 'moon' | 'halftone' | 'speedlines' | 'rain' | 'snow'
+  | 'fire' | 'aurora' | 'grid' | 'plasma' | 'hearts' | 'bubbles' | 'static' | 'searchlights' | 'stripes' | 'checker'
+  | 'paper' | 'chalkboard' | 'leaves' | 'petals' | 'glitter' | 'lightning' | 'rays' | 'memphis' | 'ocean' | 'sunset' | 'hud' | 'blueprint' | 'comicflip';
 
 /** Text animations that are rendered per-frame (need the frame-by-frame export engine). */
-export const PER_FRAME_TEXT_ANIMATIONS: TextAnimation[] = ['crawl', 'typewriter', 'slide-left', 'slide-right', 'slide-up', 'slide-down', 'zoom-in', 'zoom-out', 'pop', 'blur-in', 'letters', 'wipe', 'glitch', 'wave', 'spin-in', 'flip-in', 'rise'];
+export const PER_FRAME_TEXT_ANIMATIONS: TextAnimation[] = [
+  'crawl', 'typewriter', 'slide-left', 'slide-right', 'slide-up', 'slide-down', 'zoom-in', 'zoom-out', 'pop', 'blur-in', 'letters', 'wipe', 'glitch', 'wave', 'spin-in', 'flip-in', 'rise',
+  'words', 'elastic-letters', 'scatter-in', 'flip-letters', 'tracking-in', 'bounce-in', 'stamp', 'swing', 'focus', 'flicker', 'blinds', 'split', 'pixelate',
+  'shine', 'spotlight', 'sparkle', 'marvel', 'rainbow', 'pulse',
+];
+
+/** Letter fill styles. 'solid' uses `color`; the others are gradients built from `color` / `fillColor2` or fixed metal palettes. */
+export type TextFill = 'solid' | 'gradient' | 'rainbow' | 'gold' | 'silver' | 'chrome' | 'fire' | 'ice';
 
 /** Properties that can be animated over a time range inside a clip. */
 export type AnimatableProperty =
@@ -144,6 +165,16 @@ export interface TextProps {
   layout?: 'block' | 'two-column';
   /** Crawl tilt (0.2 = flat/slow recede, 0.9 = steep). */
   perspective?: number;
+  /** Letter fill (default 'solid'). Gradients run from `color` to `fillColor2`. */
+  fill?: TextFill;
+  fillColor2?: string;
+  /** 3D extrusion depth in px (0 = flat) and its colour. */
+  extrude?: number;
+  extrudeColor?: string;
+  /** Outline thickness as a fraction of the font size (default 0.06). */
+  outlineWidth?: number;
+  /** Vertical position of the text block as a fraction of the frame height (0 = centre, 0.3 = lower). Unlike the clip transform it leaves the backdrop in place. */
+  offsetY?: number;
 }
 
 interface ClipBase {

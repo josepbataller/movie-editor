@@ -53,14 +53,12 @@ Folders are split the same way everywhere (`video/`, `audio/`/`studio/`, shared/
   the renderer. `src/engine/ai/tools.ts` = tool schemas + executors over the stores (add a tool there
   when a new UI capability appears), `src/engine/ai/agent.ts` = loop + undo squashing,
   `src/components/assistant/` = chat panel. Test offline with `scripts/mock-llm.js` + `--assistant-prompt`.
-- `src/engine/video/backdrops.ts` animated title backgrounds; `src/engine/audio/clipOps.ts` render-in-place ops shared by the clip editor and the assistant.
-- `electron/ai.ts` — AI assistant backend (provider adapters, STT, chat files, IPC); keys never reach
-  the renderer. `src/engine/ai/tools.ts` = tool schemas + executors over the stores (add a tool there
-  when a new UI capability appears), `src/engine/ai/agent.ts` = loop + undo squashing,
-  `src/components/assistant/` = chat panel. Test offline with `scripts/mock-llm.js` + `--assistant-prompt`.
-- `src/engine/video/backdrops.ts` animated title backgrounds; `src/engine/audio/clipOps.ts` render-in-place
-  ops shared by the clip editor and the assistant.
-
+- `src/engine/video/backdrops.ts` animated title backgrounds (deterministic in t); `src/engine/video/titleTemplates.ts`
+  the Title Studio catalogue (TEMPLATE_BASE + overrides, categories; also used by the assistant's `video_add_text`).
+  `scripts/make-title-demo.ts` + `scripts/shoot-titles.js` render template frames headlessly for checking.
+  Canvas gotcha: never mask with an opaque full-canvas fillRect under source-in (Chromium treats it as a clear);
+  draw the pattern first and cut it with destination-in + drawImage.
+- `src/engine/audio/clipOps.ts` render-in-place ops shared by the clip editor and the assistant.
 ## Conventions
 
 - UI text in English. Comments explain *why*, briefly; match the surrounding style.

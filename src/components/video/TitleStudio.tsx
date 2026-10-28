@@ -1,82 +1,47 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useProject } from '@/store/useProject';
-import { TextProps, TextAnimation, TextExitAnimation, TextBackdrop, DEFAULT_TEXT, fadeFactor } from '@/shared/types';
+import { TextProps, TextAnimation, TextExitAnimation, TextBackdrop, TextFill, DEFAULT_TEXT, fadeFactor, ANIMATABLE, AnimatableProperty } from '@/shared/types';
 import { BACKDROP_LABELS } from '@/engine/video/backdrops';
 import { renderTextFrame, FONT_CHOICES } from '@/engine/video/textRender';
-import { clipBoundsWith, drawFrame, previewSource } from '@/engine/video/compositor';
+import { clipBoundsWith, drawFrame, previewSource, cssFilter } from '@/engine/video/compositor';
+import { animatedState, ANIMATION_PRESETS, newSegment } from '@/engine/video/animation';
+import { TITLE_TEMPLATES, TEMPLATE_CATEGORIES, TemplateCategory, TitleTemplate, templateStyle, findTemplate, STAR_WARS_SEQUENCE } from '@/engine/video/titleTemplates';
 
 // Title Studio: a focused, Canva-like editor for one text clip with a live,
 // scrubbable animation preview. Everything it writes goes straight to the store,
-// so the timeline / inspector stay in sync.
-
-interface Template { id: string; label: string; emoji: string; hint: string; text: Partial<TextProps>; y?: number; bg?: string; duration?: number; content?: string }
-
-const TEMPLATES: Template[] = [
-  { id: 'title', label: 'Big title', emoji: '🎬', hint: 'Bold centred title, fades in and out',
-    text: { fontFamily: 'Segoe UI', fontSize: 120, bold: true, italic: false, color: '#ffffff', align: 'center', shadow: true, outline: '', background: '', animation: 'fade', animationDuration: 0.8, exitAnimation: 'fade', exitDuration: 0.6, letterSpacing: 0, lineHeight: 1.2, boxWidth: 0.85, glow: 0, backdrop: 'none', layout: 'block' } },
-  { id: 'cinematic', label: 'Cinematic', emoji: '🎞', hint: 'Wide-spaced caps, slow fade — trailer style',
-    text: { fontFamily: 'Bahnschrift', fontSize: 92, bold: false, italic: false, color: '#e8e4d8', align: 'center', shadow: false, outline: '', background: '', animation: 'blur-in', animationDuration: 1.6, exitAnimation: 'fade', exitDuration: 1.2, letterSpacing: 18, lineHeight: 1.4, boxWidth: 0.9, glow: 0, backdrop: 'film', backdropColor: '#0a0a0c', layout: 'block' } },
-  { id: 'starwars', label: 'Star Wars crawl', emoji: '🌌', hint: 'Yellow text on a tilted plane receding into a starfield',
-    text: { fontFamily: 'Franklin Gothic Medium', fontSize: 58, bold: true, italic: false, color: '#FFE81F', align: 'center', shadow: false, outline: '', background: '', animation: 'crawl', exitAnimation: 'none', letterSpacing: 1, lineHeight: 1.3, boxWidth: 0.74, glow: 0, backdrop: 'starfield', backdropColor: '#000000', backdropColor2: '#1a237e', layout: 'block', perspective: 0.62 }, duration: 30 },
-  { id: 'galaxy', label: 'Galaxy title', emoji: '🪐', hint: 'Blue "A long time ago…" style text over space',
-    text: { fontFamily: 'Franklin Gothic Medium', fontSize: 64, bold: false, italic: false, color: '#4bd5ee', align: 'center', shadow: false, outline: '', background: '', animation: 'fade', animationDuration: 1.5, exitAnimation: 'fade', exitDuration: 1.2, letterSpacing: 1, lineHeight: 1.4, boxWidth: 0.8, glow: 0.25, glowColor: '#4bd5ee', backdrop: 'starfield', backdropColor: '#000000', backdropColor2: '#1a237e', layout: 'block' }, duration: 6 },
-  { id: 'logo-zoom', label: 'Logo zoom away', emoji: '🚀', hint: 'Huge outlined logo text flying into the distance',
-    text: { fontFamily: 'Impact', fontSize: 260, bold: false, italic: false, color: '#000000', align: 'center', shadow: false, outline: '#FFE81F', background: '', animation: 'none', animationDuration: 0.3, exitAnimation: 'zoom-out', exitDuration: 6, letterSpacing: 6, lineHeight: 0.9, boxWidth: 0.95, glow: 0, backdrop: 'starfield', backdropColor: '#000000', backdropColor2: '#1a237e', layout: 'block' }, duration: 7 },
-  { id: 'pulp', label: 'Pulp Fiction', emoji: '💼', hint: 'Yellow condensed caps that pop in',
-    text: { fontFamily: 'Impact', fontSize: 150, bold: false, italic: false, color: '#F9D71C', align: 'center', shadow: false, outline: '#000000', background: '', animation: 'pop', animationDuration: 0.5, exitAnimation: 'fade', exitDuration: 0.3, letterSpacing: 6, lineHeight: 1.0, boxWidth: 0.9, glow: 0, backdrop: 'solid', backdropColor: '#000000', layout: 'block' } },
-  { id: 'credits', label: 'Rolling credits', emoji: '📜', hint: 'Classic end credits scrolling up',
-    text: { fontFamily: 'Georgia', fontSize: 54, bold: false, italic: false, color: '#ffffff', align: 'center', shadow: false, outline: '', background: '', animation: 'scroll-up', exitAnimation: 'none', letterSpacing: 1, lineHeight: 1.7, boxWidth: 0.7, glow: 0, backdrop: 'none', layout: 'block' }, duration: 20 },
-  { id: 'credits2', label: 'Film credits (2 columns)', emoji: '🎥', hint: 'Role | Name pairs, dimmed role on the left — write lines like "Director | Josep"',
-    text: { fontFamily: 'Georgia', fontSize: 48, bold: false, italic: false, color: '#ffffff', align: 'center', shadow: false, outline: '', background: '', animation: 'scroll-up', exitAnimation: 'none', letterSpacing: 1, lineHeight: 1.9, boxWidth: 0.85, glow: 0, backdrop: 'solid', backdropColor: '#000000', layout: 'two-column' }, duration: 25,
-    content: 'Director | Your Name\nProducer | Your Name\nMusic | Your Name\nEditing | Movie Editor\n\nThanks for watching' },
-  { id: 'neon', label: 'Neon nights', emoji: '💡', hint: 'Glowing neon sign that flickers in',
-    text: { fontFamily: 'Segoe Script', fontSize: 130, bold: true, italic: false, color: '#ffffff', align: 'center', shadow: false, outline: '', background: '', animation: 'glitch', animationDuration: 1.2, exitAnimation: 'glitch', exitDuration: 0.8, letterSpacing: 2, lineHeight: 1.2, boxWidth: 0.9, glow: 0.9, glowColor: '#ff2d95', backdrop: 'gradient', backdropColor: '#120a2a', backdropColor2: '#2a0a3a', layout: 'block' } },
-  { id: 'glitch', label: 'Glitch', emoji: '📺', hint: 'RGB split and slices, CRT scanlines behind',
-    text: { fontFamily: 'Consolas', fontSize: 120, bold: true, italic: false, color: '#e8fff0', align: 'center', shadow: false, outline: '', background: '', animation: 'glitch', animationDuration: 1.5, exitAnimation: 'glitch', exitDuration: 0.8, letterSpacing: 4, lineHeight: 1.1, boxWidth: 0.9, glow: 0.2, glowColor: '#39ff14', backdrop: 'scanlines', backdropColor: '#050806', backdropColor2: '#39ff14', layout: 'block' } },
-  { id: 'matrix', label: 'Matrix', emoji: '🟩', hint: 'Green glyph rain with typed text',
-    text: { fontFamily: 'Consolas', fontSize: 72, bold: true, italic: false, color: '#b6ffb6', align: 'left', shadow: false, outline: '', background: '', animation: 'typewriter', animationDuration: 3, exitAnimation: 'glitch', exitDuration: 0.6, letterSpacing: 3, lineHeight: 1.3, boxWidth: 0.8, glow: 0.5, glowColor: '#39ff14', backdrop: 'matrix', backdropColor: '#000000', backdropColor2: '#39ff14', layout: 'block' } },
-  { id: 'noir', label: 'Film noir', emoji: '🕵', hint: 'Old film grain, serif caps, typewriter',
-    text: { fontFamily: 'Courier New', fontSize: 70, bold: true, italic: false, color: '#f0eadc', align: 'center', shadow: true, outline: '', background: '', animation: 'typewriter', animationDuration: 2.5, exitAnimation: 'fade', exitDuration: 1, letterSpacing: 3, lineHeight: 1.4, boxWidth: 0.85, glow: 0, backdrop: 'film', backdropColor: '#0c0b09', layout: 'block' } },
-  { id: 'bokeh', label: 'Bokeh / wedding', emoji: '💍', hint: 'Soft lights, script font rising letter by letter',
-    text: { fontFamily: 'Segoe Script', fontSize: 110, bold: false, italic: false, color: '#fff7f0', align: 'center', shadow: true, outline: '', background: '', animation: 'rise', animationDuration: 2, exitAnimation: 'blur-out', exitDuration: 1.2, letterSpacing: 1, lineHeight: 1.3, boxWidth: 0.9, glow: 0.3, glowColor: '#ffd1a1', backdrop: 'bokeh', backdropColor: '#2a1430', backdropColor2: '#5a2a3a', layout: 'block' } },
-  { id: 'nebula', label: 'Nebula dream', emoji: '🌠', hint: 'Colourful nebula, text waving gently',
-    text: { fontFamily: 'Century Gothic', fontSize: 100, bold: true, italic: false, color: '#ffffff', align: 'center', shadow: false, outline: '', background: '', animation: 'wave', animationDuration: 1, exitAnimation: 'fade', exitDuration: 1, letterSpacing: 6, lineHeight: 1.2, boxWidth: 0.9, glow: 0.4, glowColor: '#8ab4ff', backdrop: 'nebula', backdropColor: '#05030f', backdropColor2: '#3a1c8a', layout: 'block' } },
-  { id: 'lower', label: 'Lower third', emoji: '📰', hint: 'Name tag that slides in at the bottom',
-    text: { fontFamily: 'Segoe UI', fontSize: 46, bold: true, italic: false, color: '#ffffff', align: 'left', shadow: false, outline: '', background: 'rgba(20,20,30,0.78)', backgroundPadding: 22, animation: 'slide-right', animationDuration: 0.6, exitAnimation: 'slide-left', exitDuration: 0.5, letterSpacing: 0, lineHeight: 1.25, boxWidth: 0.9, glow: 0, backdrop: 'none', layout: 'block' }, y: 0.36 },
-  { id: 'kinetic', label: 'Kinetic', emoji: '⚡', hint: 'Letters drop in one after another',
-    text: { fontFamily: 'Arial Black', fontSize: 130, bold: true, italic: false, color: '#ffffff', align: 'center', shadow: true, outline: '', background: '', animation: 'letters', animationDuration: 1.4, exitAnimation: 'zoom-in', exitDuration: 0.5, letterSpacing: 2, lineHeight: 1.1, boxWidth: 0.9, glow: 0, backdrop: 'none', layout: 'block' } },
-  { id: 'spin', label: 'Spin in', emoji: '🌀', hint: 'Spins and grows into place, flips out',
-    text: { fontFamily: 'Impact', fontSize: 140, bold: false, italic: false, color: '#ffd166', align: 'center', shadow: true, outline: '#000000', background: '', animation: 'spin-in', animationDuration: 0.9, exitAnimation: 'flip-out', exitDuration: 0.6, letterSpacing: 3, lineHeight: 1.1, boxWidth: 0.9, glow: 0, backdrop: 'none', layout: 'block' } },
-  { id: 'comic', label: 'Comic pop', emoji: '💥', hint: 'Bouncy outlined caps, like a comic panel',
-    text: { fontFamily: 'Comic Sans MS', fontSize: 150, bold: true, italic: false, color: '#ffeb3b', align: 'center', shadow: true, outline: '#d32f2f', background: '', animation: 'pop', animationDuration: 0.6, exitAnimation: 'zoom-in', exitDuration: 0.4, letterSpacing: 2, lineHeight: 1.0, boxWidth: 0.9, glow: 0, backdrop: 'none', layout: 'block' } },
-  { id: 'elegant', label: 'Elegant', emoji: '🕊', hint: 'Serif italic with a soft blur-in',
-    text: { fontFamily: 'Georgia', fontSize: 96, bold: false, italic: true, color: '#f5efe0', align: 'center', shadow: true, outline: '', background: '', animation: 'blur-in', animationDuration: 1.2, exitAnimation: 'blur-out', exitDuration: 1, letterSpacing: 4, lineHeight: 1.3, boxWidth: 0.8, glow: 0, backdrop: 'none', layout: 'block' } },
-  { id: 'subtitle', label: 'Subtitle', emoji: '💬', hint: 'Readable caption near the bottom',
-    text: { fontFamily: 'Segoe UI', fontSize: 48, bold: false, italic: false, color: '#ffffff', align: 'center', shadow: true, outline: '#000000', background: '', animation: 'fade', animationDuration: 0.2, exitAnimation: 'fade', exitDuration: 0.2, letterSpacing: 0, lineHeight: 1.25, boxWidth: 0.9, glow: 0, backdrop: 'none', layout: 'block' }, y: 0.38 },
-  { id: 'retro', label: 'Retro wave', emoji: '📼', hint: '80s orange on a moving purple gradient',
-    text: { fontFamily: 'Copperplate Gothic Bold', fontSize: 110, bold: true, italic: false, color: '#ff9a3c', align: 'center', shadow: true, outline: '#4a148c', background: '', animation: 'slide-up', animationDuration: 0.8, exitAnimation: 'slide-down', exitDuration: 0.6, letterSpacing: 3, lineHeight: 1.2, boxWidth: 0.9, glow: 0.4, glowColor: '#ff2d95', backdrop: 'gradient', backdropColor: '#1a0533', backdropColor2: '#ff2d95', layout: 'block' } },
-];
-
-/** The classic three-shot opening: blue intro text → logo flying away → crawl, as consecutive clips. */
-const STAR_WARS_SEQUENCE: { tpl: string; content: string; duration: number }[] = [
-  { tpl: 'galaxy', content: 'A long time ago in a galaxy far,\nfar away....', duration: 6 },
-  { tpl: 'logo-zoom', content: 'MOVIE\nEDITOR', duration: 7 },
-  { tpl: 'starwars', content: 'Episode IV\nA NEW CUT\n\nIt is a period of creative unrest. Armed with a laptop and a pair of headphones, a lone editor has begun to assemble the greatest home movie ever made.\n\nSomewhere between the shaky shots and the forgotten audio, a story is waiting to be told....', duration: 40 },
-];
+// so the timeline / inspector stay in sync. Templates live in engine/video/titleTemplates.ts.
 
 const ENTRANCES: [TextAnimation, string][] = [
   ['none', 'None'], ['fade', 'Fade in'], ['slide-left', 'Slide in from right'], ['slide-right', 'Slide in from left'],
   ['slide-up', 'Slide in from bottom'], ['slide-down', 'Slide in from top'], ['zoom-in', 'Zoom in'], ['zoom-out', 'Zoom out (from big)'],
-  ['pop', 'Pop (elastic)'], ['blur-in', 'Blur in'], ['typewriter', 'Typewriter'], ['letters', 'Letter by letter'], ['rise', 'Letters rise & settle'], ['wave', 'Wave (whole clip)'], ['wipe', 'Wipe'],
+  ['pop', 'Pop (elastic)'], ['bounce-in', 'Bounce in from top'], ['stamp', 'Stamp (slam + shake)'], ['swing', 'Swing (pendulum)'],
+  ['blur-in', 'Blur in'], ['focus', 'Focus (blur + zoom)'], ['flicker', 'Flicker (neon)'], ['tracking-in', 'Tracking (spacing tightens)'],
+  ['typewriter', 'Typewriter'], ['letters', 'Letter by letter'], ['rise', 'Letters rise & settle'], ['words', 'Word by word'],
+  ['elastic-letters', 'Letters bounce in'], ['scatter-in', 'Letters fly in'], ['flip-letters', 'Letters flip in'],
+  ['wipe', 'Wipe'], ['blinds', 'Blinds'], ['split', 'Split (from centre)'], ['pixelate', 'Pixelate in'],
   ['spin-in', 'Spin in'], ['flip-in', 'Flip in'], ['glitch', 'Glitch'],
+  ['shine', 'Shine (light sweep)'], ['spotlight', 'Spotlight (hopping lamp)'], ['sparkle', 'Sparkle comet (fairy dust)'], ['marvel', 'Comic pages (Marvel style)'],
+  ['wave', 'Wave (whole clip)'], ['rainbow', 'Rainbow cycle (whole clip)'], ['pulse', 'Pulse to the beat (whole clip)'],
   ['scroll-up', 'Rolling credits (whole clip)'], ['crawl', 'Star Wars crawl (whole clip)'],
 ];
 const EXITS: [TextExitAnimation, string][] = [
   ['none', 'None'], ['fade', 'Fade out'], ['slide-left', 'Slide out left'], ['slide-right', 'Slide out right'],
-  ['slide-up', 'Slide out up'], ['slide-down', 'Slide out down'], ['zoom-out', 'Shrink away'], ['zoom-in', 'Grow away'], ['blur-out', 'Blur out'], ['wipe', 'Wipe out'],
-  ['flip-out', 'Flip out'], ['glitch', 'Glitch out'],
+  ['slide-up', 'Slide out up'], ['slide-down', 'Slide out down'], ['zoom-out', 'Shrink away'], ['zoom-in', 'Grow away'], ['blur-out', 'Blur out'],
+  ['wipe', 'Wipe out'], ['blinds-out', 'Blinds out'], ['split-out', 'Split out'], ['pixelate-out', 'Pixelate out'],
+  ['flip-out', 'Flip out'], ['spin-out', 'Spin away'], ['drop-out', 'Drop (gravity)'], ['glitch', 'Glitch out'], ['flicker-out', 'Flicker out'],
+  ['tracking-out', 'Tracking (spacing spreads)'], ['scatter', 'Letters scatter'], ['letters-out', 'Letters drop out'],
+];
+const FILLS: [TextFill, string][] = [
+  ['solid', 'Solid colour'], ['gradient', 'Gradient (2 colours)'], ['rainbow', 'Rainbow'], ['gold', 'Gold'], ['silver', 'Silver'], ['chrome', 'Chrome'], ['fire', 'Fire'], ['ice', 'Ice'],
 ];
 const BACKDROPS: [TextBackdrop, string][] = (Object.keys(BACKDROP_LABELS) as TextBackdrop[]).map((k) => [k, BACKDROP_LABELS[k]]);
+
+/** CSS approximation of a fill for the template thumbnails. */
+const FILL_CSS: Record<TextFill, string> = {
+  solid: '', gradient: '', rainbow: 'linear-gradient(90deg,#ff3b3b,#ffe14d,#3ddc84,#2ec4ff,#7a5cff)',
+  gold: 'linear-gradient(#fff2b0,#f6c343 45%,#a66f00 50%,#f9d976 60%,#c58a00)', silver: 'linear-gradient(#fff,#cfd3d8 45%,#6f767e 50%,#e6e9ec 60%,#9aa1a8)',
+  chrome: 'linear-gradient(#e9f3ff,#6a7f99 48%,#1d2a3a 50%,#dfe9f5 55%,#3a4b61)', fire: 'linear-gradient(#fff5a0,#ffb000,#ff4500,#7a0000)', ice: 'linear-gradient(#fff,#bfefff,#3aa0ff)',
+};
 
 export default function TitleStudio({ clipId }: { clipId: string }) {
   const project = useProject((s) => s.project);
@@ -86,7 +51,9 @@ export default function TitleStudio({ clipId }: { clipId: string }) {
   const snapshotRef = useRef<HTMLCanvasElement | null>(null);
   const [localT, setLocalT] = useState(0);
   const [playing, setPlaying] = useState(true);
-  const [tab, setTab] = useState<'templates' | 'style' | 'animation'>('templates');
+  const [tab, setTab] = useState<'templates' | 'style' | 'animation' | 'motion'>('templates');
+  const [category, setCategory] = useState<TemplateCategory | 'all'>('all');
+  const [query, setQuery] = useState('');
   const [scale, setScale] = useState(0.5);
   const wrapRef = useRef<HTMLDivElement>(null);
   const localRef = useRef(0);
@@ -120,7 +87,7 @@ export default function TitleStudio({ clipId }: { clipId: string }) {
     return () => ro.disconnect();
   }, [project.width, project.height]);
 
-  // Render loop
+  // Render loop (same compositing as the main preview: text frame + stacked clip animations)
   useEffect(() => {
     let raf = 0;
     let last = performance.now();
@@ -148,11 +115,14 @@ export default function TitleStudio({ clipId }: { clipId: string }) {
         const tt = Math.min(t, c.duration - 0.001);
         if (tt >= 0 && tt < c.duration) {
           const f = renderTextFrame(c.text, p.width, p.height, tt, c.duration);
-          const b = clipBoundsWith(p, c, c.transform, f.w, f.h, c.start + tt);
+          const { transform: tf, effects } = animatedState(c, tt);
+          const b = clipBoundsWith(p, c, tf, f.w, f.h, c.start + tt);
           ctx.save();
-          ctx.globalAlpha = c.transform.opacity * fadeFactor(tt, c.duration, c.fadeIn, c.fadeOut);
+          ctx.globalAlpha = tf.opacity * fadeFactor(tt, c.duration, c.fadeIn, c.fadeOut);
+          ctx.filter = c.animations?.length ? cssFilter(effects) : 'none';
           ctx.translate(b.cx, b.cy);
           if (b.rotation) ctx.rotate((b.rotation * Math.PI) / 180);
+          ctx.scale(tf.flipH ? -1 : 1, tf.flipV ? -1 : 1);
           ctx.drawImage(f.canvas, -b.w / 2, -b.h / 2, b.w, b.h);
           ctx.restore();
           // safe-area guide
@@ -170,22 +140,37 @@ export default function TitleStudio({ clipId }: { clipId: string }) {
     return () => cancelAnimationFrame(raf);
   }, [clipId, playing]);
 
+  const visibleTemplates = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return TITLE_TEMPLATES.filter((tpl) => (category === 'all' || tpl.category === category) && (!q || `${tpl.label} ${tpl.hint} ${tpl.id}`.toLowerCase().includes(q)));
+  }, [category, query]);
+
   if (!clip || clip.type !== 'text') return null;
   const t = clip.text;
   const st = useProject.getState;
   const up = (patch: Partial<TextProps>, commit = true) => st().updateText(clipId, patch, { commit });
   const restart = () => { localRef.current = 0; setLocalT(0); setPlaying(true); };
+  const segs = clip.animations ?? [];
 
-  const applyTemplate = (tpl: Template) => {
+  /** Longest duration this clip can take without running into the next clip on its track. */
+  const maxDuration = () => {
+    const next = st().project.clips.filter((c) => c.trackId === clip.trackId && c.id !== clipId && c.start >= clip.start + 0.001).sort((a, b) => a.start - b.start)[0];
+    return next ? Math.max(0.5, next.start - clip.start) : Infinity;
+  };
+  const setDuration = (d: number) => st().updateClip(clipId, { duration: Math.min(d, maxDuration()) }, { commit: false });
+
+  const applyTemplate = (tpl: TitleTemplate) => {
     st().commit();
-    if (tpl.duration) st().updateClip(clipId, { duration: tpl.duration }, { commit: false });
-    if (tpl.content && (!t.content.trim() || t.content === 'My Title' || t.content === DEFAULT_TEXT.content)) up({ content: tpl.content }, false);
-    up({ ...tpl.text }, false);
+    if (tpl.duration) setDuration(tpl.duration);
+    const placeholder = !t.content.trim() || t.content === 'My Title' || t.content === DEFAULT_TEXT.content || TITLE_TEMPLATES.some((x) => x.content === t.content);
+    if (tpl.content && placeholder) up({ content: tpl.content }, false);
+    up(templateStyle(tpl), false);
     st().updateTransform(clipId, { x: 0, y: tpl.y ? Math.round(project.height * tpl.y) : 0, scale: 1, rotation: 0 }, { commit: false });
     if (tpl.bg) st().updateProjectSettings({ backgroundColor: tpl.bg });
     // templates without an explicit duration still get a sensible length for whole-clip animations
-    if (!tpl.duration && tpl.text.animation === 'crawl' && clip.duration < 15) st().updateClip(clipId, { duration: 20 }, { commit: false });
-    if (!tpl.duration && tpl.text.animation === 'scroll-up' && clip.duration < 8) st().updateClip(clipId, { duration: 12 }, { commit: false });
+    if (!tpl.duration && tpl.text.animation === 'crawl' && clip.duration < 15) setDuration(20);
+    if (!tpl.duration && tpl.text.animation === 'scroll-up' && clip.duration < 8) setDuration(12);
+    if (!tpl.duration && (tpl.text.animationDuration ?? 0) + (tpl.text.exitDuration ?? 0) + 1 > clip.duration) setDuration(Math.ceil((tpl.text.animationDuration ?? 0) + (tpl.text.exitDuration ?? 0) + 1.5));
     restart();
   };
 
@@ -195,11 +180,11 @@ export default function TitleStudio({ clipId }: { clipId: string }) {
     st().commit();
     let start = base.start;
     STAR_WARS_SEQUENCE.forEach((shot, i) => {
-      const tpl = TEMPLATES.find((x) => x.id === shot.tpl)!;
-      const text = { ...DEFAULT_TEXT, ...tpl.text, content: shot.content } as TextProps;
+      const tpl = findTemplate(shot.tpl)!;
+      const text = { ...DEFAULT_TEXT, ...templateStyle(tpl), content: shot.content } as TextProps;
       if (i === 0) {
         st().updateText(clipId, text, { commit: false });
-        st().updateClip(clipId, { duration: shot.duration, name: 'Star Wars: intro' }, { commit: false });
+        st().updateClip(clipId, { duration: Math.min(shot.duration, maxDuration()), name: 'Star Wars: intro' }, { commit: false });
         st().updateTransform(clipId, { x: 0, y: 0, scale: 1, rotation: 0 }, { commit: false });
       } else {
         const id = st().addTextClip({ trackId: base.trackId, start, text, duration: shot.duration });
@@ -238,6 +223,8 @@ export default function TitleStudio({ clipId }: { clipId: string }) {
   };
 
   const wholeClip = t.animation === 'scroll-up' || t.animation === 'crawl';
+  const atPlayhead = Math.min(Math.max(0, localT), Math.max(0, clip.duration - 0.5));
+  const motionPresets = ANIMATION_PRESETS.filter((p) => p.id !== 'duck');
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
@@ -274,25 +261,45 @@ export default function TitleStudio({ clipId }: { clipId: string }) {
               <button className={tab === 'templates' ? 'on' : ''} onClick={() => setTab('templates')}>Templates</button>
               <button className={tab === 'style' ? 'on' : ''} onClick={() => setTab('style')}>Style</button>
               <button className={tab === 'animation' ? 'on' : ''} onClick={() => setTab('animation')}>Animation</button>
+              <button className={tab === 'motion' ? 'on' : ''} onClick={() => setTab('motion')} title="Extra motion & effects over time (zoom, spin, blur, brightness…) stacked on the text animation">Motion FX{segs.length ? ` (${segs.length})` : ''}</button>
             </div>
 
             {tab === 'templates' && (
-              <div className="template-grid">
-                <button className="template sequence" onClick={buildStarWarsSequence} title="Creates three consecutive clips: blue intro text, the logo flying away, and the crawl — all over a starfield">
-                  <span className="template-preview" style={{ background: '#000', color: '#FFE81F', fontFamily: 'Franklin Gothic Medium', fontWeight: 700 }}>🌌 ★ ★ ★</span>
-                  <span className="template-label">Star Wars opening (3 clips)</span>
-                </button>
-                {TEMPLATES.map((tpl) => (
-                  <button key={tpl.id} className="template" onClick={() => applyTemplate(tpl)} title={tpl.hint}>
-                    <span className="template-preview" style={{
-                      fontFamily: tpl.text.fontFamily, color: tpl.text.color, fontWeight: tpl.text.bold ? 700 : 400,
-                      fontStyle: tpl.text.italic ? 'italic' : 'normal', background: tpl.bg ?? (tpl.text.background || '#2a2d36'),
-                      WebkitTextStroke: tpl.text.outline ? `1px ${tpl.text.outline}` : undefined, letterSpacing: (tpl.text.letterSpacing ?? 0) / 4,
-                    }}>{tpl.emoji} Aa</span>
-                    <span className="template-label">{tpl.label}</span>
-                  </button>
-                ))}
-              </div>
+              <>
+                <div className="template-filters">
+                  <input type="search" placeholder={`Search ${TITLE_TEMPLATES.length} templates…`} value={query} onChange={(e) => setQuery(e.target.value)} />
+                  <div className="chips">
+                    {TEMPLATE_CATEGORIES.map((c) => <button key={c.id} className={`chip ${category === c.id ? 'on' : ''}`} onClick={() => setCategory(c.id)}>{c.label}</button>)}
+                  </div>
+                </div>
+                <div className="template-grid">
+                  {(category === 'all' || category === 'movies') && !query && (
+                    <button className="template sequence" onClick={buildStarWarsSequence} title="Creates three consecutive clips: blue intro text, the logo flying away, and the crawl — all over a starfield">
+                      <span className="template-preview" style={{ background: '#000', color: '#FFE81F', fontFamily: 'Franklin Gothic Medium', fontWeight: 700 }}>🌌 ★ ★ ★</span>
+                      <span className="template-label">Star Wars opening (3 clips)</span>
+                    </button>
+                  )}
+                  {visibleTemplates.map((tpl) => {
+                    const s = tpl.text;
+                    const fillCss = s.fill && s.fill !== 'solid' ? (s.fill === 'gradient' ? `linear-gradient(${s.color},${s.fillColor2 ?? '#888'})` : FILL_CSS[s.fill]) : '';
+                    const previewBg = tpl.bg ?? (s.background || (s.backdrop && s.backdrop !== 'none' ? `linear-gradient(135deg, ${s.backdropColor ?? '#000'}, ${s.backdropColor2 ?? '#1a237e'})` : '#2a2d36'));
+                    return (
+                      <button key={tpl.id} className="template" onClick={() => applyTemplate(tpl)} title={tpl.hint}>
+                        <span className="template-preview" style={{
+                          fontFamily: s.fontFamily, color: s.color, fontWeight: s.bold === false ? 400 : 700,
+                          fontStyle: s.italic ? 'italic' : 'normal', background: previewBg,
+                          WebkitTextStroke: s.outline ? `1px ${s.outline}` : undefined, letterSpacing: (s.letterSpacing ?? 0) / 4,
+                          textShadow: s.extrude ? `2px 2px 0 ${s.extrudeColor ?? '#222'}` : (s.glow ? `0 0 8px ${s.glowColor ?? s.color}` : undefined),
+                        }}>
+                          <span style={fillCss ? { background: fillCss, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', WebkitTextStroke: undefined } : undefined}>{tpl.emoji} Aa</span>
+                        </span>
+                        <span className="template-label">{tpl.label}</span>
+                      </button>
+                    );
+                  })}
+                  {visibleTemplates.length === 0 && <div className="dim small" style={{ gridColumn: '1 / -1', padding: 12 }}>No template matches "{query}".</div>}
+                </div>
+              </>
             )}
 
             {tab === 'style' && (
@@ -303,9 +310,10 @@ export default function TitleStudio({ clipId }: { clipId: string }) {
                   </select>
                 </div>
                 <Range label="Size" value={t.fontSize} min={10} max={400} step={1} onChange={(v) => up({ fontSize: v }, false)} />
-                <Range label="Spacing" value={t.letterSpacing} min={-5} max={40} step={0.5} onChange={(v) => up({ letterSpacing: v }, false)} />
+                <Range label="Spacing" value={t.letterSpacing} min={-5} max={60} step={0.5} onChange={(v) => up({ letterSpacing: v }, false)} />
                 <Range label="Line height" value={t.lineHeight} min={0.8} max={3} step={0.05} onChange={(v) => up({ lineHeight: v }, false)} />
                 <Range label="Box width" value={t.boxWidth} min={0.1} max={1} step={0.01} onChange={(v) => up({ boxWidth: v }, false)} />
+                {!wholeClip && <Range label="Vertical" value={t.offsetY ?? 0} min={-0.45} max={0.45} step={0.01} onChange={(v) => up({ offsetY: v }, false)} />}
                 <div className="row">
                   <button className={t.bold ? 'on' : ''} onClick={() => up({ bold: !t.bold })}><b>B</b></button>
                   <button className={t.italic ? 'on' : ''} onClick={() => up({ italic: !t.italic })}><i>I</i></button>
@@ -314,14 +322,27 @@ export default function TitleStudio({ clipId }: { clipId: string }) {
                   <button className={t.align === 'right' ? 'on' : ''} onClick={() => up({ align: 'right' })}>⇥</button>
                   <button onClick={() => up({ content: t.content.toUpperCase() })} title="UPPERCASE">AA</button>
                 </div>
+                <div className="field"><label>Fill</label>
+                  <select value={t.fill ?? 'solid'} onChange={(e) => up({ fill: e.target.value as TextFill })}>
+                    {FILLS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                </div>
                 <div className="field"><label>Colour</label>
                   <input type="color" value={t.color} onFocus={() => st().commit()} onChange={(e) => up({ color: e.target.value }, false)} />
+                  {t.fill === 'gradient' && <input type="color" value={t.fillColor2 ?? '#888888'} onFocus={() => st().commit()} onChange={(e) => up({ fillColor2: e.target.value }, false)} title="Second gradient colour" />}
                   <label className="check"><input type="checkbox" checked={t.shadow} onChange={(e) => up({ shadow: e.target.checked })} /> Shadow</label>
                 </div>
                 <div className="field"><label>Outline</label>
                   <input type="checkbox" checked={!!t.outline} onChange={(e) => up({ outline: e.target.checked ? '#000000' : '' })} />
                   {t.outline && <input type="color" value={t.outline} onFocus={() => st().commit()} onChange={(e) => up({ outline: e.target.value }, false)} />}
                 </div>
+                {t.outline && <Range label="Outline width" value={t.outlineWidth ?? 0.06} min={0.01} max={0.2} step={0.005} onChange={(v) => up({ outlineWidth: v }, false)} />}
+                <Range label="3D depth" value={t.extrude ?? 0} min={0} max={40} step={1} unit="px" onChange={(v) => up({ extrude: v }, false)} />
+                {(t.extrude ?? 0) > 0 && (
+                  <div className="field"><label>3D colour</label>
+                    <input type="color" value={t.extrudeColor ?? '#222222'} onFocus={() => st().commit()} onChange={(e) => up({ extrudeColor: e.target.value }, false)} />
+                  </div>
+                )}
                 <div className="field"><label>Background</label>
                   <input type="checkbox" checked={!!t.background} onChange={(e) => up({ background: e.target.checked ? 'rgba(0,0,0,0.6)' : '' })} />
                   {t.background && (
@@ -389,15 +410,60 @@ export default function TitleStudio({ clipId }: { clipId: string }) {
                   </>
                 )}
                 {t.animation === 'crawl' && <Range label="Tilt" value={t.perspective ?? 0.6} min={0.15} max={0.95} step={0.01} onChange={(v) => up({ perspective: v }, false)} />}
+                {t.animation === 'marvel' && <div className="dim small">Comic pages: the first backdrop colour is the final page colour (red), the second is the paper the pages flip on (white). Make the entrance ~4 s and the clip ~7 s.</div>}
                 {wholeClip && <div className="dim small">This animation runs across the whole clip: make the clip longer for a slower roll (a crawl usually needs 30–60 s).</div>}
                 <div className="dim small" style={{ marginTop: 10 }}>
-                  Tip: for extra motion (spin, shake, zoom…), close this window and use <b>Animations</b> in the inspector — they stack on top of the text animation.
+                  Tip: the <b>Motion FX</b> tab adds zoom, spin, shake, blur, brightness… over any time range, stacked on top of this animation.
                 </div>
+              </div>
+            )}
+
+            {tab === 'motion' && (
+              <div className="studio-form">
+                <div className="dim small" style={{ marginBottom: 6 }}>
+                  Effects over time, stacked on the text animation: presets start at the preview time ({atPlayhead.toFixed(1)} s) when it is inside the clip. Fine-tune ranges and ramps in the inspector's <b>Animations</b> section.
+                </div>
+                <div className="btn-grid presets">
+                  {motionPresets.map((p) => (
+                    <button key={p.id} title={p.description} onClick={() => { st().addAnimations(clipId, p.build(clip.duration, atPlayhead)); setPlaying(true); }}>
+                      <span className="preset-icon">{p.icon}</span>{p.label}
+                    </button>
+                  ))}
+                </div>
+                <CustomMotion clipId={clipId} duration={clip.duration} at={atPlayhead} />
+                {segs.map((s) => (
+                  <div key={s.id} className="segment">
+                    <div className="segment-head">
+                      <strong>{ANIMATABLE[s.property].label}</strong>
+                      <span className="dim small">{s.start.toFixed(1)}s → {s.end.toFixed(1)}s · {s.value > 0 ? '+' : ''}{s.value}{ANIMATABLE[s.property].unit}{s.oscillate ? ` · ${s.oscillate}/s` : ''}</span>
+                      <button className="small" style={{ marginLeft: 'auto' }} onClick={() => st().removeAnimation(clipId, s.id)} title="Remove">✕</button>
+                    </div>
+                    <Range label="Amount" value={s.value} min={ANIMATABLE[s.property].min} max={ANIMATABLE[s.property].max} step={ANIMATABLE[s.property].step} unit={ANIMATABLE[s.property].unit} onChange={(v) => st().updateAnimation(clipId, s.id, { value: v }, { commit: false })} />
+                    <Range label="From" value={s.start} min={0} max={clip.duration} step={0.1} unit="s" onChange={(v) => st().updateAnimation(clipId, s.id, { start: Math.min(v, s.end - 0.1) }, { commit: false })} />
+                    <Range label="To" value={s.end} min={0} max={clip.duration} step={0.1} unit="s" onChange={(v) => st().updateAnimation(clipId, s.id, { end: Math.max(v, s.start + 0.1) }, { commit: false })} />
+                  </div>
+                ))}
+                {segs.length > 1 && <div className="row"><button onClick={() => st().clearAnimations(clipId)}>Remove all motion effects</button></div>}
               </div>
             )}
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** "Custom" property picker for a new motion segment (same as the inspector). */
+function CustomMotion({ clipId, duration, at }: { clipId: string; duration: number; at: number }) {
+  const [prop, setProp] = useState<AnimatableProperty>('blur');
+  const props = (Object.keys(ANIMATABLE) as AnimatableProperty[]).filter((p) => p !== 'volume');
+  return (
+    <div className="field">
+      <label>Custom</label>
+      <select value={prop} onChange={(e) => setProp(e.target.value as AnimatableProperty)}>
+        {props.map((p) => <option key={p} value={p}>{ANIMATABLE[p].label}</option>)}
+      </select>
+      <button onClick={() => useProject.getState().addAnimation(clipId, newSegment(prop, duration, at))}>+ Add</button>
     </div>
   );
 }
