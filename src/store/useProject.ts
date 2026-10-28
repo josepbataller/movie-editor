@@ -50,6 +50,8 @@ interface EditorState {
   setProjectPath: (p: string | null) => void;
   markSaved: () => void;
   updateProjectSettings: (patch: Partial<Pick<Project, 'name' | 'width' | 'height' | 'fps' | 'backgroundColor'>>) => void;
+  /** Register a loaded font file with the project (replaces an entry with the same family). */
+  addFont: (font: { family: string; path: string }) => void;
 
   // --- assets
   addAssets: (assets: MediaAsset[]) => void;
@@ -170,6 +172,7 @@ export const useProject = create<EditorState>((set, get) => {
     setProjectPath: (p) => set({ projectPath: p }),
     markSaved: () => set({ dirty: false }),
     updateProjectSettings: (patch) => mutate(() => patch, false),
+    addFont: (font) => mutate((p) => ({ fonts: [...(p.fonts ?? []).filter((f) => f.family !== font.family), font] }), false),
 
     addAssets: (assets) => mutate((p) => ({ assets: [...p.assets, ...assets] }), false),
     // Asset metadata (thumbnails, waveforms) is derived data: don't mark the project dirty.

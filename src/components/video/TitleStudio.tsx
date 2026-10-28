@@ -6,6 +6,7 @@ import { renderTextFrame, FONT_CHOICES } from '@/engine/video/textRender';
 import { clipBoundsWith, drawFrame, previewSource, cssFilter } from '@/engine/video/compositor';
 import { animatedState, ANIMATION_PRESETS, newSegment } from '@/engine/video/animation';
 import { TITLE_TEMPLATES, TEMPLATE_CATEGORIES, TemplateCategory, TitleTemplate, templateStyle, findTemplate, STAR_WARS_SEQUENCE } from '@/engine/video/titleTemplates';
+import { loadFont, fontFamilyFromPath } from '@/engine/video/fonts';
 
 // Title Studio: a focused, Canva-like editor for one text clip with a live,
 // scrubbable animation preview. Everything it writes goes straight to the store,
@@ -21,6 +22,7 @@ const ENTRANCES: [TextAnimation, string][] = [
   ['wipe', 'Wipe'], ['blinds', 'Blinds'], ['split', 'Split (from centre)'], ['pixelate', 'Pixelate in'],
   ['spin-in', 'Spin in'], ['flip-in', 'Flip in'], ['glitch', 'Glitch'],
   ['shine', 'Shine (light sweep)'], ['spotlight', 'Spotlight sweep'], ['lamp', 'Hopping desk lamp (Pixar style)'], ['sparkle', 'Sparkle comet (fairy dust)'], ['marvel', 'Comic pages (Marvel style)'],
+  ['studios', 'Silver plate + bars (Marvel Studios style)'], ['globe', 'Letters around a globe (Universal style)'], ['monument', 'Gold monument (20th Century style)'],
   ['wave', 'Wave (whole clip)'], ['rainbow', 'Rainbow cycle (whole clip)'], ['pulse', 'Pulse to the beat (whole clip)'],
   ['scroll-up', 'Rolling credits (whole clip)'], ['crawl', 'Star Wars crawl (whole clip)'],
 ];
@@ -306,8 +308,22 @@ export default function TitleStudio({ clipId }: { clipId: string }) {
               <div className="studio-form">
                 <div className="field"><label>Font</label>
                   <select value={t.fontFamily} onChange={(e) => up({ fontFamily: e.target.value })} style={{ fontFamily: t.fontFamily }}>
+                    {(project.fonts?.length ?? 0) > 0 && (
+                      <optgroup label="Project font files">
+                        {project.fonts!.map((f) => <option key={f.path} value={f.family} style={{ fontFamily: f.family }}>{f.family}</option>)}
+                      </optgroup>
+                    )}
+                    {!FONT_CHOICES.includes(t.fontFamily) && !project.fonts?.some((f) => f.family === t.fontFamily) && <option value={t.fontFamily}>{t.fontFamily}</option>}
                     {FONT_CHOICES.map((f) => <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>)}
                   </select>
+                  <button className="small" title="Load a .ttf / .otf font file (e.g. a fan font like Waltograph for the Disney look); it is remembered with the project" onClick={async () => {
+                    const path = await window.api.openFontDialog();
+                    if (!path) return;
+                    const family = fontFamilyFromPath(path);
+                    if (!(await loadFont(family, path))) { alert('Could not load that font file.'); return; }
+                    st().addFont({ family, path });
+                    up({ fontFamily: family });
+                  }}>Font file…</button>
                 </div>
                 <Range label="Size" value={t.fontSize} min={10} max={400} step={1} onChange={(v) => up({ fontSize: v }, false)} />
                 <Range label="Spacing" value={t.letterSpacing} min={-5} max={60} step={0.5} onChange={(v) => up({ letterSpacing: v }, false)} />
@@ -410,6 +426,9 @@ export default function TitleStudio({ clipId }: { clipId: string }) {
                   </>
                 )}
                 {t.animation === 'crawl' && <Range label="Tilt" value={t.perspective ?? 0.6} min={0.15} max={0.95} step={0.01} onChange={(v) => up({ perspective: v }, false)} />}
+                {t.animation === 'studios' && <div className="dim small">Silver plate: the first word is cut out of the plate (the backdrop colour shows through), the remaining words go in silver between two bars. Write e.g. "MYNAME STUDIOS".</div>}
+                {t.animation === 'globe' && <div className="dim small">The letters sweep round the planet and settle in front. Fewer letters = bigger letters; the "Vertical" slider moves the whole globe.</div>}
+                {t.animation === 'monument' && <div className="dim small">One line per tier (e.g. "20th / CENTURY / MYNAME"): the first line is the biggest; each line stands on a bronze step. Works best with the "Sunset lot with searchlights" backdrop.</div>}
                 {t.animation === 'lamp' && <div className="dim small">Desk lamp: it lands on the first I (or the middle letter), flattens it, turns to the camera and switches off at the end of the entrance (the picture goes dark). Make the entrance ~5–6 s and end the clip ~1 s later for the classic cut. Exits act as a fade.</div>}
                 {t.animation === 'marvel' && <div className="dim small">Comic pages: the first backdrop colour is the final page colour (red), the second is the paper the pages flip on (white). Make the entrance ~4 s and the clip ~7 s.</div>}
                 {wholeClip && <div className="dim small">This animation runs across the whole clip: make the clip longer for a slower roll (a crawl usually needs 30–60 s).</div>}

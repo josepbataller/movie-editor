@@ -55,7 +55,10 @@ Folders are split the same way everywhere (`video/`, `audio/`/`studio/`, shared/
   `src/components/assistant/` = chat panel. Test offline with `scripts/mock-llm.js` + `--assistant-prompt`.
 - `src/engine/video/backdrops.ts` animated title backgrounds (deterministic in t); `src/engine/video/titleTemplates.ts`
   the Title Studio catalogue (TEMPLATE_BASE + overrides, categories; also used by the assistant's `video_add_text`).
-  `src/engine/video/lamp.ts` = the hopping desk lamp (choreography + vector drawing) used by the 'lamp' animation.
+  `src/engine/video/lamp.ts` = the hopping desk lamp (choreography + vector drawing) used by the 'lamp' animation;
+  `src/engine/video/logoRenderers.ts` = 'studios' / 'globe' / 'monument' whole-clip logo renderers (import helpers
+  from textRender.ts; the circular import is fine, only functions are used at call time). `src/engine/video/fonts.ts`
+  loads project font files (Project.fonts) with FontFace and clears the static text cache.
   `scripts/make-title-demo.ts` + `scripts/shoot-titles.js` render template frames headlessly for checking.
   Canvas gotcha: never mask with an opaque full-canvas fillRect under source-in (Chromium treats it as a clear);
   draw the pattern first and cut it with destination-in + drawImage.

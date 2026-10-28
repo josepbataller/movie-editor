@@ -35,9 +35,13 @@ For development with hot reload: `npm run dev`.
 6. **Titles & credits**: *Add text* (`T`) or *Add credits*, then click **Open Title Studio** in the
    inspector: a pop-up editor with a live, scrubbable preview, drag-to-position and **140+ templates**
    in categories with a search box. *Studio intros* recreate famous logo openings with **your own word**:
-   Marvel-style flipping comic pages inside the letters that freeze to red/white, Disney-style script
-   with a fairy-dust comet over fireworks, Pixar-style desk lamp that hops in, flattens a letter, takes its place, looks at you and clicks off; DreamWorks-style moon,
-   Universal, 20th Century searchlights, Netflix, HBO static, Paramount, Warner, MTV, Nickelodeon…
+   Marvel-style flipping comic pages inside the letters that freeze to red/white, Marvel-Studios-style
+   brushed-silver plate with your word cut out in red, Disney-style lit castle on a lake with a fairy-dust comet
+   (load the free fan font Waltograph via *Font file…* for the lettering), Pixar-style desk lamp that hops in,
+   flattens a letter, takes its place, looks at you and clicks off, DreamWorks-style moon, Universal-style chrome
+   letters sweeping round a turning planet, 20th-Century-style gold monument on bronze tiers with searchlights,
+   Netflix, HBO static, Paramount, Warner, MTV, Nickelodeon… Custom font files (.ttf/.otf) can be loaded per
+   project from the Style tab.
    *Movies & TV* (Star Wars crawl with real perspective + the 3-shot opening, Pulp Fiction, Stranger
    Things, Matrix, Tron, Harry Potter, Blade Runner, Jurassic, Barbie, Spider-Verse, Frozen, Mario,
    Pokémon, Game of Thrones, Friends…), *Party* (disco, confetti, fireworks, wedding, Christmas,

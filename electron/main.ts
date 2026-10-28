@@ -255,6 +255,15 @@ ipcMain.handle('dialog:openMedia', async () => {
   return res.canceled ? [] : res.filePaths;
 });
 
+ipcMain.handle('dialog:openFont', async () => {
+  const res = await dialog.showOpenDialog(win!, {
+    title: 'Load a font file',
+    properties: ['openFile'],
+    filters: [{ name: 'Fonts', extensions: ['ttf', 'otf', 'woff', 'woff2'] }, { name: 'All files', extensions: ['*'] }],
+  });
+  return res.canceled ? null : res.filePaths[0];
+});
+
 ipcMain.handle('dialog:saveProject', async (_e, defaultName: string) => {
   const res = await dialog.showSaveDialog(win!, {
     title: 'Save project',

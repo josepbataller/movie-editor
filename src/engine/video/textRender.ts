@@ -2,6 +2,7 @@ import type { TextProps, TextAnimation, TextExitAnimation } from '@/shared/types
 import { ease } from './animation';
 import { drawBackdrop } from './backdrops';
 import { drawLamp, lampChoreography, pickLampTarget } from './lamp';
+import { renderStudios, renderGlobe, renderMonument } from './logoRenderers';
 
 // Text rendering for titles / credits.
 //
@@ -17,8 +18,10 @@ import { drawLamp, lampChoreography, pickLampTarget } from './lamp';
 // every renderer — static block, per-letter staggers, masks — looks the same.
 
 const cache = new Map<string, HTMLCanvasElement>();
+/** Drop cached static renders (after a font file finishes loading). */
+export function clearTextCache() { cache.clear(); }
 
-function fontString(t: TextProps, size = t.fontSize): string {
+export function fontString(t: TextProps, size = t.fontSize): string {
   return `${t.italic ? 'italic ' : ''}${t.bold ? 'bold ' : ''}${size}px "${t.fontFamily}", "Segoe UI", Arial, sans-serif`;
 }
 
@@ -41,7 +44,7 @@ function wrapLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number
   return out;
 }
 
-interface Layout {
+export interface Layout {
   lines: string[];
   lineH: number;
   pad: number;
@@ -60,7 +63,7 @@ function splitColumns(line: string): [string, string] | null {
   return m && m[1] && m[2] ? [m[1].trim(), m[2].trim()] : null;
 }
 
-function layout(t: TextProps, frameW: number, content = t.content): Layout {
+export function layout(t: TextProps, frameW: number, content = t.content): Layout {
   const measure = document.createElement('canvas').getContext('2d')!;
   measure.font = fontString(t);
   measure.letterSpacing = `${t.letterSpacing || 0}px`;
@@ -81,7 +84,7 @@ function layout(t: TextProps, frameW: number, content = t.content): Layout {
   return { lines, lineH, pad, boxW, boxX, blockW, blockH, blockX, textX, twoCol };
 }
 
-function setupText(ctx: CanvasRenderingContext2D, t: TextProps) {
+export function setupText(ctx: CanvasRenderingContext2D, t: TextProps) {
   ctx.font = fontString(t);
   ctx.letterSpacing = `${t.letterSpacing || 0}px`;
   ctx.textBaseline = 'middle';
@@ -115,7 +118,7 @@ function fillStyleFor(ctx: CanvasRenderingContext2D, t: TextProps, line: string,
   return g;
 }
 
-function drawLine(ctx: CanvasRenderingContext2D, t: TextProps, line: string, x: number, y: number, extent?: { x0: number; w: number }) {
+export function drawLine(ctx: CanvasRenderingContext2D, t: TextProps, line: string, x: number, y: number, extent?: { x0: number; w: number }) {
   const glow = t.glow ?? 0;
   if (glow > 0) {
     // neon: a few blurred passes of the glow colour underneath
@@ -166,7 +169,7 @@ function drawLayoutLine(ctx: CanvasRenderingContext2D, t: TextProps, L: Layout, 
   drawLine(ctx, t, cols[1], mid + gap / 2, y);
 }
 
-function drawBackground(ctx: CanvasRenderingContext2D, t: TextProps, L: Layout, y: number) {
+export function drawBackground(ctx: CanvasRenderingContext2D, t: TextProps, L: Layout, y: number) {
   if (!t.background) return;
   ctx.fillStyle = t.background;
   ctx.beginPath();
@@ -176,7 +179,7 @@ function drawBackground(ctx: CanvasRenderingContext2D, t: TextProps, L: Layout, 
 
 const hasBackdrop = (t: TextProps) => !!t.backdrop && t.backdrop !== 'none';
 /** Top of the (frame-mode) text block: centred, shifted by offsetY. */
-const blockTop = (t: TextProps, frameH: number, L: Layout) => (frameH - L.blockH) / 2 + (t.offsetY ?? 0) * frameH;
+export const blockTop = (t: TextProps, frameH: number, L: Layout) => (frameH - L.blockH) / 2 + (t.offsetY ?? 0) * frameH;
 
 /** Static block canvas: frameW x frameH for normal titles, frameW x blockH for scrolling credits / crawl. */
 export function renderText(t: TextProps, frameW: number, frameH: number, content = t.content): HTMLCanvasElement {
@@ -206,7 +209,7 @@ export interface TextFrame { canvas: HTMLCanvasElement; w: number; h: number; mo
 // Scratch canvases reused for every animated frame (avoid allocating per frame):
 // 'main' is the returned frame, the others are intermediate layers (masks, partial renders).
 const layers = new Map<string, HTMLCanvasElement>();
-function layer(name: string, w: number, h: number): CanvasRenderingContext2D {
+export function layer(name: string, w: number, h: number): CanvasRenderingContext2D {
   let c = layers.get(name);
   if (!c) { c = document.createElement('canvas'); layers.set(name, c); }
   if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
@@ -214,8 +217,8 @@ function layer(name: string, w: number, h: number): CanvasRenderingContext2D {
   resetContext(ctx, w, h);
   return ctx;
 }
-const scratchCanvas = (w: number, h: number) => layer('main', w, h);
-const frameOf = (ctx: CanvasRenderingContext2D, W: number, H: number): TextFrame => ({ canvas: ctx.canvas, w: W, h: H, mode: 'frame' });
+export const scratchCanvas = (w: number, h: number) => layer('main', w, h);
+export const frameOf = (ctx: CanvasRenderingContext2D, W: number, H: number): TextFrame => ({ canvas: ctx.canvas, w: W, h: H, mode: 'frame' });
 
 function resetContext(ctx: CanvasRenderingContext2D, w: number, h: number) {
   // reset() also drops any clip region left by a previous frame
@@ -258,6 +261,9 @@ export function renderTextFrame(t: TextProps, frameW: number, frameH: number, lo
   }
   if (t.animation === 'crawl') return renderCrawl(t, W, H, localT, duration);
   if (t.animation === 'lamp') return renderLamp(t, W, H, localT, duration);
+  if (t.animation === 'studios') return renderStudios(t, W, H, localT, duration);
+  if (t.animation === 'globe') return renderGlobe(t, W, H, localT, duration);
+  if (t.animation === 'monument') return renderMonument(t, W, H, localT, duration);
 
   const D = Math.max(0.01, Math.min(t.animationDuration, duration));
   const E = Math.max(0.01, Math.min(t.exitDuration, duration));
@@ -374,7 +380,7 @@ export function renderTextFrame(t: TextProps, frameW: number, frameH: number, lo
         const pp = prog - k * 0.012;
         if (pp < 0) continue;
         const a = Math.PI - pp * Math.PI;
-        const x = W / 2 + Math.cos(a) * W * 0.4 + (hash(k, 1) - 0.5) * k * 3, y = H * (0.5 + (t.offsetY ?? 0)) - Math.sin(a) * H * 0.34 + (hash(k, 2) - 0.5) * k * 3;
+        const x = W / 2 + Math.cos(a) * W * 0.42 + (hash(k, 1) - 0.5) * k * 3, y = H * 0.62 - Math.sin(a) * H * 0.48 + (hash(k, 2) - 0.5) * k * 3;
         const fadeOut = Math.max(0, 1 - (localT - D) / 0.6);
         const tw = 0.5 + 0.5 * Math.sin(localT * 20 + k);
         ctx.fillStyle = `rgba(255,${235 - k * 3},${170 + k * 2},${(1 - k / 30) * tw * fadeOut})`;
@@ -489,10 +495,10 @@ function applyExit(block: HTMLCanvasElement, t: TextProps, W: number, H: number,
   return frameOf(ctx, W, H);
 }
 
-interface CharInfo { ch: string; x: number; y: number; w: number; i: number; total: number; word: number; words: number; line: { x0: number; w: number } }
+export interface CharInfo { ch: string; x: number; y: number; w: number; i: number; total: number; word: number; words: number; line: { x0: number; w: number } }
 
 /** Per-character layout helper: calls fn for every character with its position, index and word index. */
-function eachChar(ctx: CanvasRenderingContext2D, t: TextProps, L: Layout, H: number, fn: (c: CharInfo) => void) {
+export function eachChar(ctx: CanvasRenderingContext2D, t: TextProps, L: Layout, H: number, fn: (c: CharInfo) => void) {
   const blockY = blockTop(t, H, L);
   setupText(ctx, t);
   ctx.textAlign = 'left';

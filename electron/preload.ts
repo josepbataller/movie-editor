@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
 const api = {
   openMediaDialog: (): Promise<string[]> => ipcRenderer.invoke('dialog:openMedia'),
+  openFontDialog: (): Promise<string | null> => ipcRenderer.invoke('dialog:openFont'),
   probeMedia: (filePath: string) => ipcRenderer.invoke('media:probe', filePath),
   generateThumbnail: (filePath: string, at: number) => ipcRenderer.invoke('media:thumbnail', filePath, at),
   generateWaveform: (filePath: string) => ipcRenderer.invoke('media:waveform', filePath),

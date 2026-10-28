@@ -1,4 +1,5 @@
 import { useProject, newProject } from '@/store/useProject';
+import { loadProjectFonts } from '@/engine/video/fonts';
 import { type Project, DEFAULT_TEXT } from '@/shared/types';
 import { refreshAssets } from './importMedia';
 import { useStudio } from '@/store/useStudio';
@@ -54,6 +55,7 @@ export async function loadProjectFromPath(path: string) {
     if (!project.tracks || !project.clips) throw new Error('Not a Movie Editor project file.');
     useProject.getState().setProject(migrate(project), path);
     useStudio.getState().setSession(project.audio);
+    void loadProjectFonts(project);
     void refreshAssets(); // thumbnails/waveforms regenerate in the background
     await warnMissingMedia(project);
   } catch (err: any) {

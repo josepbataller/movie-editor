@@ -73,6 +73,8 @@ export type TextAnimation =
   | 'tracking-in' | 'bounce-in' | 'stamp' | 'swing' | 'focus' | 'flicker' | 'blinds' | 'split' | 'pixelate'
   // light / masks (studio-logo style)
   | 'shine' | 'spotlight' | 'sparkle' | 'marvel' | 'lamp'
+  // studio logo recreations (whole-clip renderers in logoRenderers.ts)
+  | 'studios' | 'globe' | 'monument'
   // whole-clip loops
   | 'rainbow' | 'pulse';
 export type TextExitAnimation =
@@ -84,13 +86,14 @@ export type TextBackdrop =
   | 'none' | 'solid' | 'starfield' | 'nebula' | 'gradient' | 'film' | 'matrix' | 'bokeh' | 'scanlines'
   | 'disco' | 'confetti' | 'fireworks' | 'clouds' | 'sunburst' | 'moon' | 'halftone' | 'speedlines' | 'rain' | 'snow'
   | 'fire' | 'aurora' | 'grid' | 'plasma' | 'hearts' | 'bubbles' | 'static' | 'searchlights' | 'stripes' | 'checker'
-  | 'paper' | 'chalkboard' | 'leaves' | 'petals' | 'glitter' | 'lightning' | 'rays' | 'memphis' | 'ocean' | 'sunset' | 'hud' | 'blueprint' | 'comicflip';
+  | 'paper' | 'chalkboard' | 'leaves' | 'petals' | 'glitter' | 'lightning' | 'rays' | 'memphis' | 'ocean' | 'sunset' | 'hud' | 'blueprint' | 'comicflip'
+  | 'castle' | 'premiere';
 
 /** Text animations that are rendered per-frame (need the frame-by-frame export engine). */
 export const PER_FRAME_TEXT_ANIMATIONS: TextAnimation[] = [
   'crawl', 'typewriter', 'slide-left', 'slide-right', 'slide-up', 'slide-down', 'zoom-in', 'zoom-out', 'pop', 'blur-in', 'letters', 'wipe', 'glitch', 'wave', 'spin-in', 'flip-in', 'rise',
   'words', 'elastic-letters', 'scatter-in', 'flip-letters', 'tracking-in', 'bounce-in', 'stamp', 'swing', 'focus', 'flicker', 'blinds', 'split', 'pixelate',
-  'shine', 'spotlight', 'sparkle', 'marvel', 'lamp', 'rainbow', 'pulse',
+  'shine', 'spotlight', 'sparkle', 'marvel', 'lamp', 'studios', 'globe', 'monument', 'rainbow', 'pulse',
 ];
 
 /** Letter fill styles. 'solid' uses `color`; the others are gradients built from `color` / `fillColor2` or fixed metal palettes. */
@@ -244,6 +247,8 @@ export interface Project {
   clips: Clip[];
   /** Audio Studio session (DAW module); see audioTypes.ts. Optional for older files. */
   audio?: import('./audioTypes').AudioSession;
+  /** Font files loaded for this project (Title Studio → Font file…); loaded with FontFace on open. */
+  fonts?: { family: string; path: string }[];
 }
 
 export interface ExportSettings {

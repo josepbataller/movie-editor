@@ -20,6 +20,7 @@ function hexToRgb(hex: string): [number, number, number] {
 }
 const rgba = (hex: string, a: number) => { const [r, g, b] = hexToRgb(hex); return `rgba(${r},${g},${b},${a})`; };
 const mod = (a: number, n: number) => ((a % n) + n) % n;
+const hashf = (a: number, b: number) => { const v = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return v - Math.floor(v); };
 
 interface Particle { x: number; y: number; z: number; tw: number; r: number }
 const particleCache = new Map<string, Particle[]>();
@@ -57,6 +58,74 @@ function star(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, po
     ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
   }
   ctx.closePath(); ctx.fill();
+}
+
+
+/** Premiere-night beams sweeping the sky from below the frame. */
+function searchlightBeams(ctx: CanvasRenderingContext2D, W: number, H: number, t: number, S: number) {
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const lights = [[0.2, 0.9], [0.4, -0.7], [0.6, 0.6], [0.8, -0.8]];
+  lights.forEach(([bx, sp], i) => {
+    const a = -Math.PI / 2 + Math.sin(t * sp * 0.5 + i) * 0.55;
+    const x0 = bx * W, y0 = H * 1.05, len = H * 2;
+    const g = ctx.createLinearGradient(x0, y0, x0 + Math.cos(a) * len, y0 + Math.sin(a) * len);
+    g.addColorStop(0, 'rgba(255,250,230,0.55)'); g.addColorStop(1, 'rgba(255,250,230,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.moveTo(x0 - 10 * S, y0); ctx.lineTo(x0 + 10 * S, y0);
+    ctx.lineTo(x0 + Math.cos(a + 0.05) * len, y0 + Math.sin(a + 0.05) * len); ctx.lineTo(x0 + Math.cos(a - 0.05) * len, y0 + Math.sin(a - 0.05) * len); ctx.closePath(); ctx.fill();
+  });
+  ctx.restore();
+}
+
+/** A fairy-tale castle: lit stone towers with blue conical roofs, drawn around (bx, by) = base centre, u = height unit. */
+function drawCastle(ctx: CanvasRenderingContext2D, bx: number, by: number, u: number, t: number) {
+  // warm glow behind the castle
+  const glow = ctx.createRadialGradient(bx, by - u * 0.25, 0, bx, by - u * 0.25, u * 0.9);
+  glow.addColorStop(0, 'rgba(255,180,90,0.35)'); glow.addColorStop(1, 'rgba(255,180,90,0)');
+  ctx.fillStyle = glow; ctx.fillRect(bx - u, by - u * 1.2, u * 2, u * 1.3);
+  const towers = [
+    { dx: -0.86, w: 0.12, h: 0.2, roof: 0.14 }, { dx: 0.86, w: 0.12, h: 0.22, roof: 0.15 },
+    { dx: -0.6, w: 0.15, h: 0.27, roof: 0.17 }, { dx: 0.6, w: 0.15, h: 0.3, roof: 0.19 },
+    { dx: -0.34, w: 0.12, h: 0.36, roof: 0.19 }, { dx: 0.34, w: 0.12, h: 0.4, roof: 0.21 },
+    { dx: -0.14, w: 0.14, h: 0.46, roof: 0.23 }, { dx: 0.14, w: 0.14, h: 0.5, roof: 0.25 },
+    { dx: 0, w: 0.2, h: 0.62, roof: 0.3 },
+  ];
+  const stone = (x: number, y: number, w: number, h: number) => {
+    const g = ctx.createLinearGradient(x, 0, x + w, 0);
+    g.addColorStop(0, '#f6cf92'); g.addColorStop(0.5, '#d9994a'); g.addColorStop(1, '#8a5520');
+    ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+    // windows
+    const cols = Math.max(1, Math.round(w / (u * 0.045))), rows = Math.max(1, Math.round(h / (u * 0.07)));
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      const flick = 0.75 + 0.25 * Math.sin(t * 3 + r * 7 + c * 13);
+      ctx.fillStyle = (r * 3 + c) % 4 === 0 ? 'rgba(60,40,20,0.6)' : 'rgba(255,236,170,' + (0.85 * flick).toFixed(2) + ')';
+      ctx.fillRect(x + w * (c + 0.5) / cols - u * 0.008, y + h * (r + 0.4) / rows, u * 0.016, u * 0.03);
+    }
+  };
+  const roof = (x: number, y: number, w: number, h: number) => {
+    const g = ctx.createLinearGradient(x, 0, x + w, 0);
+    g.addColorStop(0, '#4a6fd1'); g.addColorStop(0.5, '#1e2f70'); g.addColorStop(1, '#0d1740');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.moveTo(x - w * 0.12, y); ctx.lineTo(x + w * 1.12, y); ctx.lineTo(x + w / 2, y - h); ctx.closePath(); ctx.fill();
+    // spire + pennant
+    ctx.strokeStyle = '#e8d7a8'; ctx.lineWidth = Math.max(1, u * 0.006);
+    ctx.beginPath(); ctx.moveTo(x + w / 2, y - h); ctx.lineTo(x + w / 2, y - h - u * 0.06); ctx.stroke();
+    ctx.fillStyle = '#e63946'; ctx.beginPath(); ctx.moveTo(x + w / 2, y - h - u * 0.06); ctx.lineTo(x + w / 2 + u * 0.03, y - h - u * 0.045); ctx.lineTo(x + w / 2, y - h - u * 0.03); ctx.closePath(); ctx.fill();
+  };
+  // curtain walls with battlements
+  const wallH = u * 0.17, wallW = u * 1.9;
+  stone(bx - wallW / 2, by - wallH, wallW, wallH);
+  ctx.fillStyle = '#c98a3d';
+  for (let x = bx - wallW / 2; x < bx + wallW / 2; x += u * 0.06) ctx.fillRect(x, by - wallH - u * 0.025, u * 0.03, u * 0.025);
+  // gate
+  ctx.fillStyle = '#2a1a0a'; ctx.beginPath(); ctx.moveTo(bx - u * 0.05, by); ctx.lineTo(bx - u * 0.05, by - u * 0.09); ctx.arc(bx, by - u * 0.09, u * 0.05, Math.PI, 0); ctx.lineTo(bx + u * 0.05, by); ctx.fill();
+  // towers, back to front (shortest first so the keep ends up on top)
+  for (const tw of towers) {
+    const w = tw.w * u, h = tw.h * u, x = bx + tw.dx * u - w / 2;
+    stone(x, by - h, w, h);
+    ctx.fillStyle = '#c98a3d'; ctx.fillRect(x - w * 0.08, by - h - u * 0.01, w * 1.16, u * 0.012);
+    roof(x, by - h, w, tw.roof * u);
+  }
 }
 
 export function drawBackdrop(ctx: CanvasRenderingContext2D, kind: TextBackdrop | undefined, W: number, H: number, t: number, c1 = '#000000', c2 = '#1a237e') {
@@ -325,19 +394,60 @@ export function drawBackdrop(ctx: CanvasRenderingContext2D, kind: TextBackdrop |
     case 'searchlights': {
       // premiere-night beams sweeping the sky from below the frame
       verticalGradient(ctx, W, H, c1, c2);
-      ctx.globalCompositeOperation = 'lighter';
-      const lights = [[0.2, 0.9], [0.4, -0.7], [0.6, 0.6], [0.8, -0.8]];
-      lights.forEach(([bx, sp], i) => {
-        const a = -Math.PI / 2 + Math.sin(t * sp * 0.5 + i) * 0.55;
-        const x0 = bx * W, y0 = H * 1.05, len = H * 2;
-        const g = ctx.createLinearGradient(x0, y0, x0 + Math.cos(a) * len, y0 + Math.sin(a) * len);
-        g.addColorStop(0, 'rgba(255,250,230,0.55)'); g.addColorStop(1, 'rgba(255,250,230,0)');
-        ctx.fillStyle = g;
-        ctx.beginPath(); ctx.moveTo(x0 - 10 * S, y0); ctx.lineTo(x0 + 10 * S, y0);
-        ctx.lineTo(x0 + Math.cos(a + 0.05) * len, y0 + Math.sin(a + 0.05) * len); ctx.lineTo(x0 + Math.cos(a - 0.05) * len, y0 + Math.sin(a - 0.05) * len); ctx.closePath(); ctx.fill();
-      });
-      ctx.globalCompositeOperation = 'source-over';
+      searchlightBeams(ctx, W, H, t, S);
       for (const s of particles('slstars', 80)) { ctx.fillStyle = `rgba(255,255,255,${0.3 + 0.4 * s.z})`; ctx.fillRect(s.x * W, s.y * H * 0.7, 1.5 * S, 1.5 * S); }
+      break;
+    }
+    case 'castle': {
+      // fairy-tale night: deep blue sky, pink cloud streaks, lit castle on a lake with its reflection
+      const sky = ctx.createLinearGradient(0, 0, 0, H);
+      sky.addColorStop(0, c1); sky.addColorStop(0.7, c2); sky.addColorStop(1, '#0a1e46');
+      ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+      for (const s of particles('castlestars', 150)) { ctx.fillStyle = 'rgba(255,255,255,' + (0.35 + 0.55 * s.z * (0.6 + 0.4 * Math.sin(t * 2 + s.tw))).toFixed(2) + ')'; ctx.fillRect(s.x * W, s.y * H * 0.6, 1.6 * S, 1.6 * S); }
+      for (const p of particles('castleclouds', 8)) {
+        const w = (260 + p.z * 420) * S, h = (10 + p.z * 22) * S;
+        const x = mod(p.x * W + t * 5 * S + w, W + w * 2) - w, y = H * (0.3 + p.y * 0.24);
+        const g = ctx.createRadialGradient(x, y, 0, x, y, w);
+        g.addColorStop(0, 'rgba(255,140,170,0.6)'); g.addColorStop(0.5, 'rgba(255,170,150,0.3)'); g.addColorStop(1, 'rgba(255,140,170,0)');
+        ctx.save(); ctx.translate(x, y); ctx.scale(1, h / w); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, w, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+      }
+      const horizon = H * 0.66;
+      // distant hills and the lake
+      ctx.fillStyle = '#071233'; ctx.beginPath(); ctx.moveTo(0, horizon);
+      for (let x = 0; x <= W; x += 20) ctx.lineTo(x, horizon - (10 + 14 * Math.sin(x / (170 * S)) + 8 * Math.sin(x / (61 * S))) * S);
+      ctx.lineTo(W, horizon); ctx.closePath(); ctx.fill();
+      const lake = ctx.createLinearGradient(0, horizon, 0, H); lake.addColorStop(0, '#0d2a63'); lake.addColorStop(1, '#03091c');
+      ctx.fillStyle = lake; ctx.fillRect(0, horizon, W, H - horizon);
+      for (let i = 0; i < 40; i++) { ctx.fillStyle = 'rgba(255,225,160,' + (0.4 + 0.5 * hashf(i, 3)).toFixed(2) + ')'; ctx.fillRect(hashf(i, 1) * W, horizon - 3 * S, 3 * S, 2 * S); }
+      // reflection first (so the castle base covers its top edge), then the castle
+      ctx.save(); ctx.translate(0, horizon * 2); ctx.scale(1, -0.45); ctx.globalAlpha = 0.28;
+      drawCastle(ctx, W / 2, horizon, H * 0.55, t);
+      ctx.restore();
+      ctx.fillStyle = 'rgba(3,9,28,0.25)';
+      for (let y = horizon + 4; y < H; y += 7 * S) ctx.fillRect(0, y + Math.sin(t * 2 + y) * 1.5, W, 2 * S);
+      drawCastle(ctx, W / 2, horizon, H * 0.55, t);
+      break;
+    }
+    case 'premiere': {
+      // sunset over the studio lot: purple-to-orange sky, dark clouds with lit rims, searchlights
+      const sky = ctx.createLinearGradient(0, 0, 0, H);
+      sky.addColorStop(0, c1); sky.addColorStop(0.55, c2); sky.addColorStop(1, '#ffb070');
+      ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+      for (const s of particles('premstars', 60)) { ctx.fillStyle = 'rgba(255,255,255,' + (0.3 + 0.4 * s.z).toFixed(2) + ')'; ctx.fillRect(s.x * W, s.y * H * 0.35, 1.5 * S, 1.5 * S); }
+      for (const p of particles('premclouds', 9)) {
+        const w = (220 + p.z * 380) * S;
+        const x = mod(p.x * W + t * (6 + p.z * 8) * S + w, W + w * 2) - w, y = H * (0.25 + p.y * 0.5);
+        // soft cloud: dark purple body with a lit orange upper rim
+        ctx.save(); ctx.translate(x, y); ctx.scale(1, 0.22);
+        const body = ctx.createRadialGradient(0, 0, 0, 0, 0, w * 0.5);
+        body.addColorStop(0, 'rgba(70,25,80,0.6)'); body.addColorStop(0.7, 'rgba(70,25,80,0.35)'); body.addColorStop(1, 'rgba(70,25,80,0)');
+        ctx.fillStyle = body; ctx.beginPath(); ctx.arc(0, 0, w * 0.5, 0, Math.PI * 2); ctx.fill();
+        const rim = ctx.createRadialGradient(0, -w * 0.1, 0, 0, -w * 0.1, w * 0.45);
+        rim.addColorStop(0, 'rgba(255,180,120,0.5)'); rim.addColorStop(1, 'rgba(255,180,120,0)');
+        ctx.fillStyle = rim; ctx.beginPath(); ctx.arc(0, -w * 0.1, w * 0.45, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
+      searchlightBeams(ctx, W, H, t, S);
       break;
     }
     case 'sunset': {
@@ -643,5 +753,5 @@ export const BACKDROP_LABELS: Record<TextBackdrop, string> = {
   ocean: 'Ocean waves', aurora: 'Aurora', rain: 'Rain', snow: 'Snow', leaves: 'Autumn leaves', petals: 'Cherry petals', fire: 'Fire', lightning: 'Storm',
   halftone: 'Comic halftone', speedlines: 'Anime speed lines', comicflip: 'Flipping comic pages', grid: 'Synthwave grid', plasma: 'Plasma / lava lamp',
   static: 'TV static', stripes: 'Diagonal stripes', checker: 'Checkerboard', memphis: '90s Memphis shapes', paper: 'Paper', chalkboard: 'Chalkboard',
-  hud: 'Sci-fi HUD', blueprint: 'Blueprint grid',
+  hud: 'Sci-fi HUD', blueprint: 'Blueprint grid', castle: 'Fairy-tale castle at night', premiere: 'Sunset lot with searchlights',
 };
