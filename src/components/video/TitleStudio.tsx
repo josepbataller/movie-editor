@@ -20,7 +20,7 @@ const ENTRANCES: [TextAnimation, string][] = [
   ['elastic-letters', 'Letters bounce in'], ['scatter-in', 'Letters fly in'], ['flip-letters', 'Letters flip in'],
   ['wipe', 'Wipe'], ['blinds', 'Blinds'], ['split', 'Split (from centre)'], ['pixelate', 'Pixelate in'],
   ['spin-in', 'Spin in'], ['flip-in', 'Flip in'], ['glitch', 'Glitch'],
-  ['shine', 'Shine (light sweep)'], ['spotlight', 'Spotlight (hopping lamp)'], ['sparkle', 'Sparkle comet (fairy dust)'], ['marvel', 'Comic pages (Marvel style)'],
+  ['shine', 'Shine (light sweep)'], ['spotlight', 'Spotlight sweep'], ['lamp', 'Hopping desk lamp (Pixar style)'], ['sparkle', 'Sparkle comet (fairy dust)'], ['marvel', 'Comic pages (Marvel style)'],
   ['wave', 'Wave (whole clip)'], ['rainbow', 'Rainbow cycle (whole clip)'], ['pulse', 'Pulse to the beat (whole clip)'],
   ['scroll-up', 'Rolling credits (whole clip)'], ['crawl', 'Star Wars crawl (whole clip)'],
 ];
@@ -410,6 +410,7 @@ export default function TitleStudio({ clipId }: { clipId: string }) {
                   </>
                 )}
                 {t.animation === 'crawl' && <Range label="Tilt" value={t.perspective ?? 0.6} min={0.15} max={0.95} step={0.01} onChange={(v) => up({ perspective: v }, false)} />}
+                {t.animation === 'lamp' && <div className="dim small">Desk lamp: it lands on the first I (or the middle letter), flattens it, turns to the camera and switches off at the end of the entrance (the picture goes dark). Make the entrance ~5–6 s and end the clip ~1 s later for the classic cut. Exits act as a fade.</div>}
                 {t.animation === 'marvel' && <div className="dim small">Comic pages: the first backdrop colour is the final page colour (red), the second is the paper the pages flip on (white). Make the entrance ~4 s and the clip ~7 s.</div>}
                 {wholeClip && <div className="dim small">This animation runs across the whole clip: make the clip longer for a slower roll (a crawl usually needs 30–60 s).</div>}
                 <div className="dim small" style={{ marginTop: 10 }}>

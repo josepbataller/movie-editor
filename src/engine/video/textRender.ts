@@ -1,6 +1,7 @@
 import type { TextProps, TextAnimation, TextExitAnimation } from '@/shared/types';
 import { ease } from './animation';
 import { drawBackdrop } from './backdrops';
+import { drawLamp, lampChoreography, pickLampTarget } from './lamp';
 
 // Text rendering for titles / credits.
 //
@@ -256,6 +257,7 @@ export function renderTextFrame(t: TextProps, frameW: number, frameH: number, lo
     return { canvas: c, w: c.width, h: c.height, mode: 'block' };
   }
   if (t.animation === 'crawl') return renderCrawl(t, W, H, localT, duration);
+  if (t.animation === 'lamp') return renderLamp(t, W, H, localT, duration);
 
   const D = Math.max(0.01, Math.min(t.animationDuration, duration));
   const E = Math.max(0.01, Math.min(t.exitDuration, duration));
@@ -602,6 +604,46 @@ function renderMarvel(t: TextProps, W: number, H: number, pin: number, localT: n
   // a soft white flash at the moment the pages freeze
   const flash = Math.max(0, 1 - Math.abs(pin - 0.72) / 0.08);
   if (flash > 0) { ctx.fillStyle = `rgba(255,255,255,${flash * 0.6})`; ctx.fillRect(0, 0, W, H); }
+  return frameOf(ctx, W, H);
+}
+
+/**
+ * Desk-lamp logo (Pixar style): the word is on screen, the lamp hops in from the right,
+ * flattens one letter with a few bounces, takes its place, looks at the camera and switches
+ * off. The choreography spans animationDuration; afterwards the final pose holds. Exits are
+ * applied as a fade of the text + lamp.
+ */
+function renderLamp(t: TextProps, W: number, H: number, localT: number, duration: number): TextFrame {
+  const L = layout(t, W);
+  const ctx = scratchCanvas(W, H);
+  drawBackdrop(ctx, t.backdrop, W, H, localT, t.backdropColor, t.backdropColor2);
+  const D = Math.max(2, Math.min(t.animationDuration, duration));
+  const E = Math.max(0.01, Math.min(t.exitDuration, duration));
+  const pout = t.exitAnimation === 'none' ? 0 : Math.min(1, Math.max(0, (localT - (duration - E)) / E));
+  const chars: CharInfo[] = [];
+  eachChar(ctx, t, L, H, (c) => chars.push(c));
+  const ti = pickLampTarget(chars);
+  const fs = t.fontSize, unit = fs * 0.52;
+  const target = ti >= 0 ? chars[ti] : null;
+  const ground = (target ? target.y : H / 2) + fs * 0.35, letterH = fs * 0.7;
+  const xT = target ? target.x + target.w / 2 : W / 2;
+  const st = lampChoreography(localT / D, W + unit * 1.2, xT, ground, letterH, unit);
+
+  ctx.globalAlpha = 1 - ease('ease', pout);
+  drawBackground(ctx, t, L, blockTop(t, H, L));
+  setupText(ctx, t);
+  ctx.textAlign = 'left';
+  for (const c of chars) {
+    if (c === target) {
+      if (st.letterSy < 0.03) continue;
+      // squash the letter towards its baseline
+      ctx.save(); ctx.translate(xT, ground); ctx.scale(1, st.letterSy); ctx.translate(-xT, -ground);
+      drawLine(ctx, t, c.ch, c.x, c.y, c.line); ctx.restore();
+    } else drawLine(ctx, t, c.ch, c.x, c.y, c.line);
+  }
+  drawLamp(ctx, st);
+  if (st.dark > 0) { ctx.fillStyle = 'rgba(0,0,0,' + (st.dark * 0.92).toFixed(3) + ')'; ctx.fillRect(0, 0, W, H); }
+  ctx.globalAlpha = 1;
   return frameOf(ctx, W, H);
 }
 

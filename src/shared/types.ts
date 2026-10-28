@@ -72,7 +72,7 @@ export type TextAnimation =
   // whole-block moves
   | 'tracking-in' | 'bounce-in' | 'stamp' | 'swing' | 'focus' | 'flicker' | 'blinds' | 'split' | 'pixelate'
   // light / masks (studio-logo style)
-  | 'shine' | 'spotlight' | 'sparkle' | 'marvel'
+  | 'shine' | 'spotlight' | 'sparkle' | 'marvel' | 'lamp'
   // whole-clip loops
   | 'rainbow' | 'pulse';
 export type TextExitAnimation =
@@ -90,7 +90,7 @@ export type TextBackdrop =
 export const PER_FRAME_TEXT_ANIMATIONS: TextAnimation[] = [
   'crawl', 'typewriter', 'slide-left', 'slide-right', 'slide-up', 'slide-down', 'zoom-in', 'zoom-out', 'pop', 'blur-in', 'letters', 'wipe', 'glitch', 'wave', 'spin-in', 'flip-in', 'rise',
   'words', 'elastic-letters', 'scatter-in', 'flip-letters', 'tracking-in', 'bounce-in', 'stamp', 'swing', 'focus', 'flicker', 'blinds', 'split', 'pixelate',
-  'shine', 'spotlight', 'sparkle', 'marvel', 'rainbow', 'pulse',
+  'shine', 'spotlight', 'sparkle', 'marvel', 'lamp', 'rainbow', 'pulse',
 ];
 
 /** Letter fill styles. 'solid' uses `color`; the others are gradients built from `color` / `fillColor2` or fixed metal palettes. */

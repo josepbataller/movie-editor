@@ -36,7 +36,7 @@ For development with hot reload: `npm run dev`.
    inspector: a pop-up editor with a live, scrubbable preview, drag-to-position and **140+ templates**
    in categories with a search box. *Studio intros* recreate famous logo openings with **your own word**:
    Marvel-style flipping comic pages inside the letters that freeze to red/white, Disney-style script
-   with a fairy-dust comet over fireworks, Pixar-style hopping spotlight, DreamWorks-style moon,
+   with a fairy-dust comet over fireworks, Pixar-style desk lamp that hops in, flattens a letter, takes its place, looks at you and clicks off; DreamWorks-style moon,
    Universal, 20th Century searchlights, Netflix, HBO static, Paramount, Warner, MTV, Nickelodeon…
    *Movies & TV* (Star Wars crawl with real perspective + the 3-shot opening, Pulp Fiction, Stranger
    Things, Matrix, Tron, Harry Potter, Blade Runner, Jurassic, Barbie, Spider-Verse, Frozen, Mario,
