@@ -22,7 +22,7 @@ const ENTRANCES: [TextAnimation, string][] = [
   ['wipe', 'Wipe'], ['blinds', 'Blinds'], ['split', 'Split (from centre)'], ['pixelate', 'Pixelate in'],
   ['spin-in', 'Spin in'], ['flip-in', 'Flip in'], ['glitch', 'Glitch'],
   ['shine', 'Shine (light sweep)'], ['spotlight', 'Spotlight sweep'], ['lamp', 'Hopping desk lamp (Pixar style)'], ['sparkle', 'Sparkle comet (fairy dust)'], ['marvel', 'Comic pages (Marvel style)'],
-  ['studios', 'Silver plate + bars (Marvel Studios style)'], ['globe', 'Letters around a globe (Universal style)'], ['monument', 'Gold monument (20th Century style)'],
+  ['studios', 'Silver plate + bars (Marvel Studios style)'], ['globe', 'Letters around a globe (Universal style)'], ['monument', 'Gold monument (20th Century style)'], ['ribbons', 'Red initial → colour ribbons (Netflix style)'],
   ['wave', 'Wave (whole clip)'], ['rainbow', 'Rainbow cycle (whole clip)'], ['pulse', 'Pulse to the beat (whole clip)'],
   ['scroll-up', 'Rolling credits (whole clip)'], ['crawl', 'Star Wars crawl (whole clip)'],
 ];
@@ -426,6 +426,7 @@ export default function TitleStudio({ clipId }: { clipId: string }) {
                   </>
                 )}
                 {t.animation === 'crawl' && <Range label="Tilt" value={t.perspective ?? 0.6} min={0.15} max={0.95} step={0.01} onChange={(v) => up({ perspective: v }, false)} />}
+                {t.animation === 'ribbons' && <div className="dim small">Streaming ident: the first letter appears big in the text colour with a folded-ribbon shade, bursts into coloured light ribbons flying past the camera, then the whole word fades in. Best on a solid black backdrop, entrance ~4 s.</div>}
                 {t.animation === 'studios' && <div className="dim small">Silver plate: the first word is cut out of the plate (the backdrop colour shows through), the remaining words go in silver between two bars. Write e.g. "MYNAME STUDIOS".</div>}
                 {t.animation === 'globe' && <div className="dim small">The letters sweep round the planet and settle in front. Fewer letters = bigger letters; the "Vertical" slider moves the whole globe.</div>}
                 {t.animation === 'monument' && <div className="dim small">One line per tier (e.g. "20th / CENTURY / MYNAME"): the first line is the biggest; each line stands on a bronze step. Works best with the "Sunset lot with searchlights" backdrop.</div>}

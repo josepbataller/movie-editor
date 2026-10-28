@@ -38,7 +38,8 @@ For development with hot reload: `npm run dev`.
    Marvel-style flipping comic pages inside the letters that freeze to red/white, Marvel-Studios-style
    brushed-silver plate with your word cut out in red, Disney-style lit castle on a lake with a fairy-dust comet
    (load the free fan font Waltograph via *Font file…* for the lettering), Pixar-style desk lamp that hops in,
-   flattens a letter, takes its place, looks at you and clicks off, DreamWorks-style moon, Universal-style chrome
+   flattens a letter, takes its place, looks at you and clicks off, DreamWorks-style glowing moon with a boy fishing from the crescent among cumulus clouds, Netflix-style ident
+   (red initial bursting into colour ribbons), Universal-style chrome
    letters sweeping round a turning planet, 20th-Century-style gold monument on bronze tiers with searchlights,
    Netflix, HBO static, Paramount, Warner, MTV, Nickelodeon… Custom font files (.ttf/.otf) can be loaded per
    project from the Style tab.

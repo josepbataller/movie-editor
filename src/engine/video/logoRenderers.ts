@@ -280,3 +280,83 @@ export function renderMonument(t: TextProps, W: number, H: number, localT: numbe
   ctx.restore();
   return frameOf(ctx, W, H);
 }
+
+// ---------------------------------------------------------------------------
+// 'ribbons' (streaming ident): the big red initial with a folded-ribbon shade, which bursts into
+// a fan of coloured light ribbons rushing past the camera, then the full word fades in.
+// ---------------------------------------------------------------------------
+
+const RIBBON_HUES = [355, 10, 25, 40, 55, 90, 140, 170, 200, 230, 260, 290, 320];
+
+export function renderRibbons(t: TextProps, W: number, H: number, localT: number, duration: number): TextFrame {
+  const ctx = scratchCanvas(W, H);
+  drawBackdrop(ctx, t.backdrop, W, H, localT, t.backdropColor, t.backdropColor2);
+  const { u, exitAlpha } = timing(t, localT, duration);
+  const word = t.content.trim() || 'N';
+  const initial = [...word][0];
+  const cx = W / 2, cy = H / 2 + (t.offsetY ?? 0) * H;
+  const big = t.fontSize * 2.4;
+  const bigT: TextProps = { ...t, fontSize: big, fill: 'solid', glow: 0, outline: '', extrude: 0, shadow: false, background: '' };
+
+  // measure the initial
+  const m = layer('fx', W, H);
+  m.font = fontString(bigT); m.textBaseline = 'middle'; m.textAlign = 'center';
+  const letterW = m.measureText(initial).width, letterH = big * 0.75;
+
+  // phase A (0–0.42): the initial grows in; a diagonal darker band gives the folded-ribbon look
+  if (u < 0.6) {
+    const a = clamp01(u / 0.42);
+    const s = 0.85 + 0.15 * ease('ease', a);
+    const fadeOut = u > 0.42 ? 1 - clamp01((u - 0.42) / 0.14) : 1;
+    m.fillStyle = t.color; m.fillText(initial, cx, cy + big * 0.03);
+    m.globalCompositeOperation = 'source-atop';
+    const band = m.createLinearGradient(cx - letterW / 2, cy - letterH / 2, cx + letterW / 2, cy + letterH / 2);
+    band.addColorStop(0, 'rgba(0,0,0,0)'); band.addColorStop(0.42, 'rgba(0,0,0,0)'); band.addColorStop(0.47, 'rgba(0,0,0,0.45)'); band.addColorStop(0.58, 'rgba(0,0,0,0.45)'); band.addColorStop(0.63, 'rgba(0,0,0,0)'); band.addColorStop(1, 'rgba(0,0,0,0.25)');
+    m.fillStyle = band; m.fillRect(0, 0, W, H);
+    // sweep of light down the diagonal stroke
+    const k = (a * 1.6 - 0.3);
+    const sweep = m.createLinearGradient(cx - letterW / 2, cy - letterH / 2, cx + letterW / 2, cy + letterH / 2);
+    sweep.addColorStop(clamp01(k - 0.12), 'rgba(255,255,255,0)'); sweep.addColorStop(clamp01(k), 'rgba(255,255,255,0.45)'); sweep.addColorStop(clamp01(k + 0.12), 'rgba(255,255,255,0)');
+    m.fillStyle = sweep; m.fillRect(0, 0, W, H);
+    m.globalCompositeOperation = 'source-over';
+    ctx.save(); ctx.globalAlpha = Math.min(1, a * 3) * fadeOut * exitAlpha;
+    ctx.translate(cx, cy); ctx.scale(s, s); ctx.drawImage(m.canvas, -cx, -cy); ctx.restore();
+  }
+
+  // phase B (0.38–0.8): coloured ribbons burst out of the letter and fly past the camera
+  if (u > 0.38 && u < 0.82) {
+    const b = clamp01((u - 0.38) / 0.44);
+    const zoom = 1 + Math.pow(b, 2.2) * 26;
+    const fade = Math.min(1, b * 5) * (1 - clamp01((b - 0.55) / 0.45));
+    const N = 54, w0 = (letterW * 1.15) / N;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = fade * exitAlpha;
+    for (let i = 0; i < N; i++) {
+      const x0 = cx + (i / (N - 1) - 0.5) * letterW * 1.15;
+      const hue = RIBBON_HUES[Math.floor(hash(i, 1) * RIBBON_HUES.length)];
+      const depth = 0.6 + hash(i, 2) * 0.9;                   // ribbons at different depths zoom at different speeds
+      const z = 1 + (zoom - 1) * depth;
+      const x = cx + (x0 - cx) * z, w = Math.max(1.5, w0 * z * (0.6 + hash(i, 3)));
+      if (x + w < 0 || x - w > W) continue;
+      const top = cy - letterH / 2 * z * (0.8 + hash(i, 4) * 0.6), bot = cy + letterH / 2 * z * (0.8 + hash(i, 5) * 0.6);
+      const g = ctx.createLinearGradient(0, top, 0, bot);
+      const l = 55 + hash(i, 6) * 15;
+      g.addColorStop(0, 'hsla(' + hue + ',95%,' + l + '%,0)'); g.addColorStop(0.25, 'hsla(' + hue + ',95%,' + l + '%,0.9)'); g.addColorStop(0.75, 'hsla(' + hue + ',95%,' + l + '%,0.9)'); g.addColorStop(1, 'hsla(' + hue + ',95%,' + l + '%,0)');
+      ctx.fillStyle = g; ctx.fillRect(x - w / 2, Math.max(-H, top), w, Math.min(3 * H, bot - top));
+    }
+    ctx.restore();
+    // bright core flash as the burst starts
+    const flash = Math.max(0, 1 - b * 3);
+    if (flash > 0) { const fg = ctx.createRadialGradient(cx, cy, 0, cx, cy, letterH); fg.addColorStop(0, 'rgba(255,230,230,' + (0.8 * flash).toFixed(2) + ')'); fg.addColorStop(1, 'rgba(255,230,230,0)'); ctx.fillStyle = fg; ctx.fillRect(0, 0, W, H); }
+  }
+
+  // phase C (0.62–1): the full word settles in
+  if (u > 0.62) {
+    const c = ease('ease', clamp01((u - 0.62) / 0.3));
+    ctx.save(); ctx.globalAlpha = c * exitAlpha;
+    ctx.translate(cx, cy); ctx.scale(1.06 - 0.06 * c, 1.06 - 0.06 * c); ctx.translate(-cx, -cy);
+    setupText(ctx, t); ctx.textAlign = 'center';
+    drawLine(ctx, t, word, cx, cy);
+    ctx.restore();
+  }
+  return frameOf(ctx, W, H);
+}

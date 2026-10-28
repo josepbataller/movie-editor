@@ -128,6 +128,56 @@ function drawCastle(ctx: CanvasRenderingContext2D, bx: number, by: number, u: nu
   }
 }
 
+
+/** A fluffy cumulus cloud: overlapping puffs shaded from moonlit top-left to a blue base. */
+function drawCumulus(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, t: number, alpha: number, seed: number) {
+  const r = rng(seed);
+  const drift = Math.sin(t * 0.08 + seed) * size * 0.04;
+  const puffs = 9 + Math.floor(r() * 5);
+  const list: { x: number; y: number; rad: number }[] = [];
+  for (let i = 0; i < puffs; i++) {
+    const a = r() * Math.PI, d = r() * size * 0.45;
+    list.push({ x: cx + drift + Math.cos(a) * d * 1.3, y: cy - Math.abs(Math.sin(a)) * d * 0.9, rad: size * (0.18 + r() * 0.22) });
+  }
+  list.sort((p, q) => q.y - p.y); // lower puffs first so the top ones overlap them
+  ctx.save(); ctx.globalAlpha = alpha;
+  for (const p of list) {
+    const g = ctx.createRadialGradient(p.x - p.rad * 0.35, p.y - p.rad * 0.45, p.rad * 0.1, p.x, p.y, p.rad);
+    g.addColorStop(0, '#eef3ff'); g.addColorStop(0.4, '#c3d1f4'); g.addColorStop(0.75, '#7b93d6'); g.addColorStop(0.92, 'rgba(84,110,190,0.9)'); g.addColorStop(1, 'rgba(74,99,181,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, p.rad, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+/** Silhouette of a boy sitting on the crescent, fishing; (sx, sy) = seat point, R = moon radius. */
+function drawMoonBoy(ctx: CanvasRenderingContext2D, sx: number, sy: number, R: number) {
+  const u = R;
+  ctx.save(); ctx.translate(sx, sy);
+  ctx.fillStyle = '#0d1f5c'; ctx.strokeStyle = '#0d1f5c'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  // torso + hips (leaning forward, facing left)
+  ctx.beginPath();
+  ctx.moveTo(-0.02 * u, -0.08 * u); ctx.lineTo(0.12 * u, -0.1 * u); ctx.lineTo(0.14 * u, -0.5 * u); ctx.lineTo(0.0 * u, -0.56 * u); ctx.lineTo(-0.1 * u, -0.3 * u); ctx.closePath(); ctx.fill();
+  // head with a tuft of hair
+  ctx.beginPath(); ctx.arc(0.02 * u, -0.66 * u, 0.1 * u, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-0.04 * u, -0.74 * u); ctx.lineTo(0.0 * u, -0.8 * u); ctx.lineTo(0.08 * u, -0.75 * u); ctx.closePath(); ctx.fill();
+  // legs: thighs forward, shins hanging, feet
+  ctx.lineWidth = 0.075 * u;
+  ctx.beginPath(); ctx.moveTo(0.06 * u, -0.1 * u); ctx.lineTo(-0.22 * u, -0.16 * u); ctx.lineTo(-0.2 * u, 0.16 * u); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0.1 * u, -0.08 * u); ctx.lineTo(-0.12 * u, -0.1 * u); ctx.lineTo(-0.08 * u, 0.2 * u); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(-0.22 * u, 0.18 * u, 0.06 * u, 0.03 * u, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(-0.1 * u, 0.22 * u, 0.06 * u, 0.03 * u, 0, 0, Math.PI * 2); ctx.fill();
+  // arms holding the rod
+  ctx.lineWidth = 0.06 * u;
+  ctx.beginPath(); ctx.moveTo(0.06 * u, -0.46 * u); ctx.lineTo(-0.14 * u, -0.36 * u); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0.1 * u, -0.42 * u); ctx.lineTo(-0.08 * u, -0.3 * u); ctx.stroke();
+  // rod: long, slightly bent, pointing up-left; line hanging from its tip
+  ctx.lineWidth = 0.022 * u;
+  ctx.beginPath(); ctx.moveTo(-0.08 * u, -0.3 * u); ctx.quadraticCurveTo(-0.7 * u, -0.75 * u, -1.15 * u, -0.98 * u); ctx.stroke();
+  ctx.lineWidth = 0.012 * u;
+  ctx.beginPath(); ctx.moveTo(-1.15 * u, -0.98 * u); ctx.quadraticCurveTo(-1.2 * u, -0.6 * u, -1.1 * u, -0.25 * u); ctx.stroke();
+  ctx.restore();
+}
+
 export function drawBackdrop(ctx: CanvasRenderingContext2D, kind: TextBackdrop | undefined, W: number, H: number, t: number, c1 = '#000000', c2 = '#1a237e') {
   if (!kind || kind === 'none') return;
   ctx.save();
@@ -341,22 +391,36 @@ export function drawBackdrop(ctx: CanvasRenderingContext2D, kind: TextBackdrop |
       break;
     }
     case 'moon': {
-      // night sky, big moon, slow clouds crossing it
+      // night sky with a glowing disc, a dark crescent with a boy fishing from it, and big
+      // cumulus clouds lit by the moon (DreamWorks-style)
       verticalGradient(ctx, W, H, c1, c2);
-      for (const s of particles('moonstars', 140)) { ctx.fillStyle = `rgba(255,255,255,${0.4 + 0.5 * Math.sin(t * 2 + s.tw) * s.z})`; ctx.fillRect(s.x * W, s.y * H * 0.8, 1.6 * S, 1.6 * S); }
-      const mx = W * 0.5, my = H * 0.4, mr = H * 0.23;
-      const halo = ctx.createRadialGradient(mx, my, mr * 0.9, mx, my, mr * 1.8);
-      halo.addColorStop(0, 'rgba(220,230,255,0.35)'); halo.addColorStop(1, 'rgba(220,230,255,0)');
-      ctx.fillStyle = halo; ctx.fillRect(0, 0, W, H);
-      const mg = ctx.createRadialGradient(mx - mr * 0.3, my - mr * 0.3, mr * 0.2, mx, my, mr);
-      mg.addColorStop(0, '#fffbe8'); mg.addColorStop(1, '#cfd2dc');
-      ctx.fillStyle = mg; ctx.beginPath(); ctx.arc(mx, my, mr, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = 'rgba(120,125,140,0.25)';
-      for (const c of [[0.2, -0.3, 0.18], [-0.35, 0.1, 0.22], [0.1, 0.4, 0.14], [-0.1, -0.05, 0.1]]) { ctx.beginPath(); ctx.arc(mx + c[0] * mr, my + c[1] * mr, c[2] * mr, 0, Math.PI * 2); ctx.fill(); }
-      for (const p of particles('moonclouds', 5)) {
-        const w = (320 + p.z * 380) * S;
-        cloud(ctx, mod(p.x * W + t * (10 + p.z * 14) * S + w, W + w * 2) - w, H * (0.5 + p.y * 0.45), w, 0.1 + p.z * 0.12);
+      for (const s of particles('moonstars', 160)) {
+        const tw = 0.5 + 0.5 * Math.sin(t * 2 + s.tw);
+        ctx.fillStyle = 'rgba(255,255,255,' + (0.3 + 0.6 * s.z * tw).toFixed(2) + ')';
+        if (s.z > 0.85) star(ctx, s.x * W, s.y * H * 0.7, (3 + 3 * tw) * S); else ctx.fillRect(s.x * W, s.y * H * 0.7, 1.6 * S, 1.6 * S);
       }
+      const mx = W / 2, my = H * 0.36, mr = H * 0.2;
+      const halo = ctx.createRadialGradient(mx, my, mr * 0.8, mx, my, mr * 2.6);
+      halo.addColorStop(0, 'rgba(210,225,255,0.55)'); halo.addColorStop(0.4, 'rgba(180,200,255,0.18)'); halo.addColorStop(1, 'rgba(180,200,255,0)');
+      ctx.fillStyle = halo; ctx.fillRect(0, 0, W, H);
+      // back clouds (behind the moon)
+      drawCumulus(ctx, W * 0.1, H * 0.78, H * 0.42, t, 0.95, 11);
+      drawCumulus(ctx, W * 0.93, H * 0.75, H * 0.46, t, 0.95, 23);
+      drawCumulus(ctx, W * 1.02, H * 0.22, H * 0.3, t, 0.8, 37);
+      // disc + crescent + boy
+      ctx.save(); ctx.beginPath(); ctx.arc(mx, my, mr, 0, Math.PI * 2); ctx.clip();
+      const disc = ctx.createRadialGradient(mx - mr * 0.2, my - mr * 0.2, 0, mx, my, mr);
+      disc.addColorStop(0, '#ffffff'); disc.addColorStop(1, '#d8e2ff');
+      ctx.fillStyle = disc; ctx.fillRect(mx - mr, my - mr, mr * 2, mr * 2);
+      ctx.fillStyle = '#0d1f5c';
+      ctx.beginPath(); ctx.arc(mx, my, mr, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = disc;
+      ctx.beginPath(); ctx.arc(mx - mr * 0.22, my - mr * 0.02, mr * 0.9, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      drawMoonBoy(ctx, mx + mr * 0.08, my + mr * 0.5, mr);
+      // front clouds (in front of the lower part of the moon)
+      drawCumulus(ctx, W * 0.28, H * 1.02, H * 0.5, t, 1, 51);
+      drawCumulus(ctx, W * 0.72, H * 1.05, H * 0.52, t, 1, 67);
       break;
     }
     case 'sunburst': {
@@ -749,7 +813,7 @@ export const BACKDROP_LABELS: Record<TextBackdrop, string> = {
   none: 'None (transparent)', solid: 'Solid colour', starfield: 'Starfield (space)', nebula: 'Nebula', gradient: 'Moving gradient',
   film: 'Old film (grain, vignette)', matrix: 'Matrix rain', bokeh: 'Bokeh lights', scanlines: 'CRT scanlines',
   disco: 'Disco lights', confetti: 'Confetti', fireworks: 'Fireworks', hearts: 'Floating hearts', bubbles: 'Bubbles', glitter: 'Glitter sparkles',
-  clouds: 'Sky with clouds', moon: 'Moon night', sunburst: 'Sunburst rays', rays: 'God rays', searchlights: 'Premiere searchlights', sunset: 'Retro sunset',
+  clouds: 'Sky with clouds', moon: 'Moon with a fishing boy (DreamWorks style)', sunburst: 'Sunburst rays', rays: 'God rays', searchlights: 'Premiere searchlights', sunset: 'Retro sunset',
   ocean: 'Ocean waves', aurora: 'Aurora', rain: 'Rain', snow: 'Snow', leaves: 'Autumn leaves', petals: 'Cherry petals', fire: 'Fire', lightning: 'Storm',
   halftone: 'Comic halftone', speedlines: 'Anime speed lines', comicflip: 'Flipping comic pages', grid: 'Synthwave grid', plasma: 'Plasma / lava lamp',
   static: 'TV static', stripes: 'Diagonal stripes', checker: 'Checkerboard', memphis: '90s Memphis shapes', paper: 'Paper', chalkboard: 'Chalkboard',

@@ -2,7 +2,7 @@ import type { TextProps, TextAnimation, TextExitAnimation } from '@/shared/types
 import { ease } from './animation';
 import { drawBackdrop } from './backdrops';
 import { drawLamp, lampChoreography, pickLampTarget } from './lamp';
-import { renderStudios, renderGlobe, renderMonument } from './logoRenderers';
+import { renderStudios, renderGlobe, renderMonument, renderRibbons } from './logoRenderers';
 
 // Text rendering for titles / credits.
 //
@@ -264,6 +264,7 @@ export function renderTextFrame(t: TextProps, frameW: number, frameH: number, lo
   if (t.animation === 'studios') return renderStudios(t, W, H, localT, duration);
   if (t.animation === 'globe') return renderGlobe(t, W, H, localT, duration);
   if (t.animation === 'monument') return renderMonument(t, W, H, localT, duration);
+  if (t.animation === 'ribbons') return renderRibbons(t, W, H, localT, duration);
 
   const D = Math.max(0.01, Math.min(t.animationDuration, duration));
   const E = Math.max(0.01, Math.min(t.exitDuration, duration));
