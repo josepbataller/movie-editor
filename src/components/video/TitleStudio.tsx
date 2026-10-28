@@ -22,7 +22,7 @@ const ENTRANCES: [TextAnimation, string][] = [
   ['wipe', 'Wipe'], ['blinds', 'Blinds'], ['split', 'Split (from centre)'], ['pixelate', 'Pixelate in'],
   ['spin-in', 'Spin in'], ['flip-in', 'Flip in'], ['glitch', 'Glitch'],
   ['shine', 'Shine (light sweep)'], ['spotlight', 'Spotlight sweep'], ['lamp', 'Hopping desk lamp (Pixar style)'], ['sparkle', 'Sparkle comet (fairy dust)'], ['marvel', 'Comic pages (Marvel style)'],
-  ['studios', 'Silver plate + bars (Marvel Studios style)'], ['globe', 'Letters around a globe (Universal style)'], ['monument', 'Gold monument (20th Century style)'], ['ribbons', 'Red initial → colour ribbons (Netflix style)'],
+  ['studios', 'Silver plate + bars (Marvel Studios style)'], ['globe', 'Letters around a globe (Universal style)'], ['monument', 'Gold monument (20th Century style)'], ['monument2', 'Gold monument V2 (orbit + perspective)'], ['ribbons', 'Red initial → colour ribbons (Netflix style)'],
   ['wave', 'Wave (whole clip)'], ['rainbow', 'Rainbow cycle (whole clip)'], ['pulse', 'Pulse to the beat (whole clip)'],
   ['scroll-up', 'Rolling credits (whole clip)'], ['crawl', 'Star Wars crawl (whole clip)'],
 ];
@@ -429,6 +429,7 @@ export default function TitleStudio({ clipId }: { clipId: string }) {
                 {t.animation === 'ribbons' && <div className="dim small">Streaming ident: the first letter appears big in the text colour with a folded-ribbon shade, bursts into coloured light ribbons flying past the camera, then the whole word fades in. Best on a solid black backdrop, entrance ~4 s.</div>}
                 {t.animation === 'studios' && <div className="dim small">Silver plate: the first word is cut out of the plate (the backdrop colour shows through), the remaining words go in silver between two bars. Write e.g. "MYNAME STUDIOS".</div>}
                 {t.animation === 'globe' && <div className="dim small">The letters sweep round the planet and settle in front. Fewer letters = bigger letters; the "Vertical" slider moves the whole globe.</div>}
+                {t.animation === 'monument2' && <div className="dim small">One line per tier. Perspective gold letters, an orbital camera and rooftop searchlights. Lines fit automatically; font size controls overall scale.</div>}
                 {t.animation === 'monument' && <div className="dim small">One line per tier (e.g. "20th / CENTURY / MYNAME"): the first line is the biggest; each line stands on a bronze step. Works best with the "Sunset lot with searchlights" backdrop.</div>}
                 {t.animation === 'lamp' && <div className="dim small">Desk lamp: it lands on the first I (or the middle letter), flattens it, turns to the camera and switches off at the end of the entrance (the picture goes dark). Make the entrance ~5–6 s and end the clip ~1 s later for the classic cut. Exits act as a fade.</div>}
                 {t.animation === 'marvel' && <div className="dim small">Comic pages: the first backdrop colour is the final page colour (red), the second is the paper the pages flip on (white). Make the entrance ~4 s and the clip ~7 s.</div>}
